@@ -71,5 +71,11 @@
     {"test_id": "21301A3"},
     {"test_id": "21301A4"},
     {"test_id": "21301A5"}
+  ],
+  "_comment_saffire": "SAFFIRE-III: the two calibrated sensor workbooks and the 1 Hz telemetry file.",
+  "saffire": [
+    {"file": 1},
+    {"file": 2},
+    {"telemetry": true}
   ]
 }

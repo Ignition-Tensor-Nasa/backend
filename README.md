@@ -490,3 +490,21 @@ case IDs `FD-<test>`), chosen by rule (up to 5 per fuel and test day, recordings
   `z_st` the tabulated mean Zst (null for runs marked `RAMPED`).
 - Inverse flames are not included: their table has no fuel column and a different
   meaning of the oxygen fraction.
+
+## Source family: Saffire-III (PSI-100)
+
+`data_prep/saffire.py` adds three cases (`investigation = "Saffire-III"`, fuel `SIBAL fabric`)
+to the `saffire-iii` project, from the files listed in `manifest_projects.json`:
+
+- `SAF3-FILE1`, `SAF3-FILE2`: the calibrated 30 Hz workbooks "Sample 1/2 Sensors". The source
+  does not explain the numbering, so the cases are named after the files and described by what
+  their data show: in file 1 the sample thermocouples rise by about 1075 K and the radiometers
+  reach 169 mW/cm²; in file 2 the igniter fires but nothing heats up. Atmosphere filter values
+  are the experiment's own readings before ignition.
+- `SAF3-TELEMETRY`: the 1 Hz downlink as two datasets, `-saffire` (housekeeping) and `-cygnus`
+  (the vehicle's smoke detector, cabin pressure and temperature; rows are multiplexed, so a
+  channel that was not reported on a row is null).
+- Events: `Igniter on` / `Igniter off`, the first and last sample with igniter current above
+  0.3 A (a threshold rule, stated in each event's `source`). This is the project's
+  `ignition_label` for aligned overlays.
+- The page generator `polars_analysis/saffire3.py` remains a separate standalone view.

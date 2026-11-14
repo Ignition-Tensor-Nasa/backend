@@ -122,8 +122,9 @@ def overlay(project_id: str, kind: str, channel: str, filters: Filters, align: s
         found_channel = True
         t0 = 0.0
         if align == "ignition":
+            label = project.get("ignition_label", IGNITION)
             mark = next((e["time_s"] for e in events.get(case["case_id"], [])
-                         if e["label"] == IGNITION and e["dataset_id"] == dataset["dataset_id"]), None)
+                         if e["label"] == label and e["dataset_id"] == dataset["dataset_id"]), None)
             if mark is None:
                 skipped_no_ignition += 1
                 continue
@@ -150,8 +151,8 @@ def overlay(project_id: str, kind: str, channel: str, filters: Filters, align: s
     notes = [f"Each curve is a min/max envelope of at most {max_points} points per run (peaks kept, "
              "no smoothing or interpolation); n_source gives the full sample count."]
     if align == "ignition":
-        notes.append(f"t = 0 is the ignition entry of each run's test-point log; {skipped_no_ignition} "
-                     "matching run(s) have no logged ignition and are left out.")
+        notes.append(f"t = 0 is the '{project.get('ignition_label', IGNITION)}' event of each run; {skipped_no_ignition} "
+                     "matching run(s) have no such event and are left out.")
     else:
         notes.append("t = 0 is the first sample of each recording; runs are not aligned to an event.")
     if truncated:

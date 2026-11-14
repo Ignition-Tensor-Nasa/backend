@@ -64,10 +64,10 @@ def test_overlay_aligns_to_logged_ignition_and_reports_runs_left_out(client, mon
     body = client.post("/api/v1/projects/proj-a/overlay", json=overlay_body(align="ignition")).json()
     assert body["x"]["label"] == "Time since ignition"
     assert body["series"][0]["points"][0] == [-0.5, 1.5]  # fixture ignition at 0.5 s
-    assert "0 matching run(s) have no logged ignition" in body["note"]
+    assert "0 matching run(s) have no such event" in body["note"]
     monkeypatch.setattr(projects, "IGNITION", "Something else")
     body = client.post("/api/v1/projects/proj-a/overlay", json=overlay_body(align="ignition")).json()
-    assert body["series"] == [] and "1 matching run(s) have no logged ignition" in body["note"]
+    assert body["series"] == [] and "1 matching run(s) have no such event" in body["note"]
 
 
 def test_overlay_errors(client):
