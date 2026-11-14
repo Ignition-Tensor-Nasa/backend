@@ -1,0 +1,54 @@
+{
+ "_review": "Reviewed by hand from the pass-1 proposal. Only change: C12H26 -> dodecane, because the per-test summary PDFs of the selected FLEX tests name the fuel 'Dodecane'. The two C12H26/iso-dodecane blends stay unclassified (null): no selected test uses them and no canonical name was verified.",
+ "reviewed": true,
+ "investigations": {
+  "ACME CFI-G": {
+   "fuel": {
+    "30% butane": {
+     "canonical": "butane",
+     "rows": 52
+    },
+    "30% ethane": {
+     "canonical": "ethane",
+     "rows": 27
+    },
+    "30% propane": {
+     "canonical": "propane",
+     "rows": 36
+    },
+    "50% butane": {
+     "canonical": "butane",
+     "rows": 30
+    },
+    "ethane": {
+     "canonical": "ethane",
+     "rows": 14
+    },
+    "propane": {
+     "canonical": "propane",
+     "rows": 20
+    }
+   }
+  },
+  "CFI (FLEX)": {
+   "fuel": {
+    "C12H26": {
+     "canonical": "dodecane",
+     "rows": 80
+    },
+    "Farnesane": {
+     "canonical": "farnesane",
+     "rows": 44
+    },
+    "[.60]/[.40] C12H26/iso-dodecane": {
+     "canonical": null,
+     "rows": 52
+    },
+    "[.75]/[.25] C12H26/iso-dodecane": {
+     "canonical": null,
+     "rows": 51
+    }
+   }
+  }
+ }
+}

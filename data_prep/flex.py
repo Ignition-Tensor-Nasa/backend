@@ -92,6 +92,15 @@ def sheet_rows(path: Path) -> dict[str, dict]:
     return {f"FLEX-{row[0]}": dict(zip(headers, row)) for row in rows[1:] if row[0] is not None}
 
 
+def flex_conditions(row: dict, pdf: dict) -> tuple[float | None, float | None]:
+    """(o2_pct, pressure_kpa) of one Master Sheet row, cross-checked with the summary PDF."""
+    sheet_o2 = float(row["Oxygen"])
+    # The two sources must agree before the value is used as a filter.
+    o2_pct = round(sheet_o2 * 100, 3) if abs(sheet_o2 - pdf["yo2"]) <= 0.005 else None
+    atm = re.fullmatch(r"\s*(\d*\.?\d+)\s*atm\s*", str(row["Pressure"]))
+    return o2_pct, round(float(atm.group(1)) * ATM_TO_KPA, 3) if atm else None
+
+
 def flex_cases(data_dir: Path, entries: list[dict]):
     """Yield (case row, [(descriptor, frame), ...]) for the reviewed FLEX tests."""
     if not entries:
@@ -130,10 +139,7 @@ def flex_cases(data_dir: Path, entries: list[dict]):
             print(f"SKIPPED {test_id}: {reason}")
             continue
         sheet_o2 = float(row["Oxygen"])
-        # The two sources must agree before the value is used as a filter.
-        o2_pct = round(sheet_o2 * 100, 3) if abs(sheet_o2 - pdf["yo2"]) <= 0.005 else None
-        atm = re.fullmatch(r"\s*(\d*\.?\d+)\s*atm\s*", str(row["Pressure"]))
-        kpa = round(float(atm.group(1)) * ATM_TO_KPA, 3) if atm else None
+        o2_pct, kpa = flex_conditions(row, pdf)
         fuel_label = str(row["Fuel"]).strip()
         fuel = FUELS.get(fuel_label)
         conditions = ", ".join(part for part in (

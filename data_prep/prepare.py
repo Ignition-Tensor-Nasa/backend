@@ -202,16 +202,31 @@ def explain_cfig(row: dict, o2_pct: float | None, kpa: float | None) -> str:
     return f"{opening} {outcome}"
 
 
-def cfig_cases(data_dir: Path, entries: list[dict]):
-    """Yield (case row, [(descriptor, frame), ...]) for ACME CFI-G normal-flame tests."""
-    family = data_dir / FAMILY
-    table_path = family / "csv" / TABLE
+def cfig_table(data_dir: Path) -> dict[str, list[dict]]:
+    """Rows of the normal-flame experimental table by test ID (spaces removed)."""
+    table_path = data_dir / FAMILY / "csv" / TABLE
     if not table_path.is_file():
         raise SystemExit(f"Raw data not found: {table_path} (pass --data-dir)")
     table = pl.read_csv(table_path, infer_schema=False)
     rows: dict[str, list[dict]] = {}
     for row in table.rename({name: name.strip() for name in table.columns}).to_dicts():
         rows.setdefault(re.sub(r"\s+", "", row.get("Test") or ""), []).append(row)
+    return rows
+
+
+def cfig_conditions(row: dict) -> tuple[float | None, float | None, float | None]:
+    """(o2_pct, pressure_kpa, z_st) of one table row; unknown stays None."""
+    o2 = number(row, "XO2 before test")
+    bar = number(row, "approx p (bar)")
+    return (None if o2 is None else round(o2 * 100, 3),
+            None if bar is None else round(bar * BAR_TO_KPA, 3),
+            number(row, "Zst"))  # as tabulated by the source
+
+
+def cfig_cases(data_dir: Path, entries: list[dict]):
+    """Yield (case row, [(descriptor, frame), ...]) for ACME CFI-G normal-flame tests."""
+    family = data_dir / FAMILY
+    rows = cfig_table(data_dir)
     for entry in entries:
         test_id = entry["test_id"]
         case_id = f"CFIG-{test_id}"
@@ -242,10 +257,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             continue
         events = tp_events(family / "txt" / (prefix + "TP.txt"), start)
         fuel_label = text(row, "Fuel")
-        o2 = number(row, "XO2 before test")
-        bar = number(row, "approx p (bar)")
-        o2_pct = None if o2 is None else round(o2 * 100, 3)
-        kpa = None if bar is None else round(bar * BAR_TO_KPA, 3)
+        o2_pct, kpa, z_st = cfig_conditions(row)
         conditions = ", ".join(part for part in (
             fuel_label, None if o2_pct is None else f"{o2_pct:.1f}% O₂",
             None if kpa is None else f"{kpa:.0f} kPa") if part)
@@ -257,7 +269,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             "fuel": fuel_label and re.sub(r"^\d+%\s*", "", fuel_label),
             "o2_pct": o2_pct,
             "pressure_kpa": kpa,
-            "z_st": number(row, "Zst"),  # as tabulated by the source
+            "z_st": z_st,
             "source_label": f"NASA PSI-159 ACME CFI-G, test point {test_id}: "
                             f"{TABLE}; {prefix}data.csv",
             "source_url": None,

@@ -64,3 +64,25 @@ def test_explanation_uses_only_table_fields():
     assert explain_cfig({"Fuel": "propane", "Hot ignition": "No", "Cool flame?": "no, PCI-hot"},
                         None, 101.33) == (
         "Gas flame test with propane in about 101 kPa. The source table records no hot ignition.")
+
+
+def test_two_pass_vocabulary_proposal_classification_and_comparison():
+    from data_prep import two_pass
+
+    assert two_pass.propose_fuel(" 30% butane ") == "butane"
+    assert two_pass.propose_fuel("Farnesane") == "farnesane"
+    assert two_pass.propose_fuel("C12H26") is None  # formulas need a reviewer
+    assert two_pass.propose_fuel("[.60]/[.40] C12H26/iso-dodecane") is None
+    vocabulary = {"investigations": {"INV": {"fuel": {"C12H26": {"canonical": "dodecane"},
+                                                       "blend": {"canonical": None}}}}}
+    assert two_pass.classify_fuel(vocabulary, "INV", " C12H26 ") == "dodecane"
+    assert two_pass.classify_fuel(vocabulary, "INV", "blend") is None
+    assert two_pass.classify_fuel(vocabulary, "INV", "kerosene") is None  # not in the vocabulary
+    assert two_pass.classify_fuel(vocabulary, "OTHER", "C12H26") is None
+    row = {"case_id": "a", "investigation": "INV", "fuel": "dodecane", "o2_pct": 21.0,
+           "pressure_kpa": 101.3, "z_st": None}
+    same = pl.DataFrame([row])
+    assert two_pass.differences(same, same.with_columns(pl.lit("x").alias("note"))) == []
+    changed = pl.DataFrame([row | {"fuel": None}, row | {"case_id": "b"}])
+    assert two_pass.differences(same, changed) == [
+        "b: only in curated output", "a.fuel: two-pass 'dodecane' != curated None"]

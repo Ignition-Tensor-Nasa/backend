@@ -5,3 +5,4 @@ __pycache__/
 /data/
 polars_analysis/outputs/
 .env
+data_prep/vocabulary.proposed.json

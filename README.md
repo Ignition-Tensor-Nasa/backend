@@ -288,3 +288,28 @@ or two plain sentences filled from the source table row (or, for FLEX, the
 Master Sheet row and the reviewed summary-PDF values) by a fixed pattern in
 the preparation script. No AI text is generated, and the explanation states
 nothing the case's source fields do not. It is not a science chatbot.
+
+## Two-pass preparation (B09)
+
+`data_prep/two_pass.py` re-derives the filter values in two passes and checks
+them against the curated catalogue:
+
+```sh
+python3 -m data_prep.two_pass propose  --data-dir ../data_nasa   # pass 1
+python3 -m data_prep.two_pass classify --data-dir ../data_nasa   # pass 2
+```
+
+- Pass 1 reads every row of the two summary tables and writes
+  `data_prep/vocabulary.proposed.json`: each raw fuel label with a suggested
+  canonical value (plain names only; formulas and blends get `null`).
+- A person reviews it and saves `data_prep/vocabulary.json` with
+  `"reviewed": true`. The committed file has one manual decision
+  (`C12H26` → `dodecane`, per the summary PDFs); the two blends stay `null`.
+- Pass 2 revisits every test in the manifest, classifies the fuel through the
+  reviewed vocabulary (unknown labels stay `null`), applies the same numeric
+  rules as the main script, writes `data/curated/catalogue_two_pass.parquet`
+  and exits non-zero unless it reproduces the curated filter values.
+
+It currently reproduces all 43 curated cases. It is rule-based (no LLM), reads
+metadata tables only (no research text or PDFs), and covers the selected
+inputs, not the whole corpus.
