@@ -104,3 +104,20 @@ def test_acme_conversions_follow_the_nasa_formulas(tmp_path):
     assert out["MFCA3FuelFlow"].to_list() == [0.1, 0.5]
     assert out["MFCA2BypassFlow"].to_list() == [1.0, 1.0]  # no scale in the header: left untouched
     assert out["PMT1"].to_list() == [1.0, 2.0]
+
+
+def test_flame_design_channel_sets_and_explanation(tmp_path):
+    from data_prep import flame_design
+
+    standard = tmp_path / "a.csv"
+    standard.write_text("pre\nTime,PTA1,RadiometerCenter,RadiometerOffset\n")
+    later = tmp_path / "b.csv"
+    later.write_text("pre\nTime,PTA1,Radiometer3+30LoGain\n")
+    assert flame_design.channels_for(standard)[1][0] == "RadiometerCenter"
+    assert flame_design.channels_for(later)[1][0] == "Radiometer3+30LoGain"
+    row = {"Fuel": "C2H4", "Tad (K)": "2352.14"}
+    assert flame_design.explain(row, "ethylene", 20.7, 103.2) == (
+        "Normal (fuel-inside) flame test with ethylene in 20.7% oxygen and about 103 kPa. "
+        "The table gives an adiabatic flame temperature of 2352 K.")
+    assert flame_design.explain({"Fuel": "C3H8", "Tad (K)": "RAMPED"}, None, None, None) == (
+        "Normal (fuel-inside) flame test with C3H8.")

@@ -20,6 +20,11 @@
     }
    ]
   },
+  "ACME Flame Design": {
+   "tags": ["unknown"],
+   "rationale": "The documents shipped with PSI-10 describe the hardware and operations; no statement tying Flame Design to fire prevention, detection or suppression was found in them.",
+   "evidence": []
+  },
   "ACME CFI-G": {
    "tags": [
     "unknown"

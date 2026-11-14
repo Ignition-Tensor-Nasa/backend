@@ -474,3 +474,19 @@ summary fields plus `n_source`, `sampled`, `points: [[x, y|null], ...]`) and a
   support only `align: "start"`.
 - Different conditions are never averaged together; colour/grouping by
   `fuel`, `o2_pct` or `pressure_kpa` is the frontend's job.
+
+## Source family: ACME Flame Design (PSI-10)
+
+`data_prep/flame_design.py` adds 70 normal-flame tests (`investigation = "ACME Flame Design"`,
+case IDs `FD-<test>`), chosen by rule (up to 5 per fuel and test day, recordings under
+7 MB without corrupted blocks; `python3 -m data_prep.flame_design select`) and stored in
+`data_prep/manifest_projects.json`.
+
+- Same recording format, linking and unit conversions as CFI-G. Two radiometer arrays
+  occur: the standard ACME array (five +60/+30/centre/-30/-60 channels) and, in
+  later runs, the CFI-G array; each dataset lists the channels it really has.
+- `fuel` maps the table's formulas (C2H4, C3H8) to ethylene and propane;
+  `o2_pct` is `XO2 (init)`, `pressure_kpa` the table's mean pressure in atm × 101.325,
+  `z_st` the tabulated mean Zst (null for runs marked `RAMPED`).
+- Inverse flames are not included: their table has no fuel column and a different
+  meaning of the oxygen fraction.

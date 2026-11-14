@@ -325,17 +325,20 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
 
 
 def prepare(data_dir: Path, out_dir: Path) -> None:
+    from data_prep.flame_design import flame_design_cases
     from data_prep.flex import flex_cases  # needs openpyxl; imported late to avoid a cycle
     from data_prep.similarity import METRIC, nearest_neighbours
 
     manifest = json.loads((Path(__file__).parent / "manifest.json").read_text("utf-8"))
+    more = json.loads((Path(__file__).parent / "manifest_projects.json").read_text("utf-8"))
     shutil.rmtree(out_dir / "csv", ignore_errors=True)  # output of earlier versions
     parquet_dir = out_dir / "parquet"
     shutil.rmtree(parquet_dir, ignore_errors=True)
     parquet_dir.mkdir(parents=True)
     cases, datasets, events = [], [], {}
     for case, exports in (*cfig_cases(data_dir, manifest["cases"]),
-                          *flex_cases(data_dir, manifest.get("flex_cases", []))):
+                          *flex_cases(data_dir, manifest.get("flex_cases", [])),
+                          *flame_design_cases(data_dir, more.get("flame_design", []))):
         for meta, frame in exports:
             assert frame.columns == [column["key"] for column in meta["columns"]]
             frame.write_parquet(parquet_dir / meta["file"])
