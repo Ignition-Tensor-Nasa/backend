@@ -18,6 +18,7 @@ ROWS = [
     ("T-005", "INV-B", None, None, 101.3),
     ("T-006", "INV-B", "ethylene", float("nan"), 200.0),
 ]
+Z_ST = {"T-001": 0.1, "T-002": 0.25, "T-003": 0.3}  # unknown for the others
 CSV = "time_s,signal\n0.0,1.5\n0.5,\n"
 
 
@@ -40,9 +41,9 @@ def clear_caches():
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     pl.DataFrame(
-        [(cid, f"Fixture {cid}", inv, fuel, o2, kpa, "Fixture source", None, "Fixture note")
-         for cid, inv, fuel, o2, kpa in ROWS],
-        schema=["case_id", "title", "investigation", "fuel", "o2_pct", "pressure_kpa",
+        [(cid, f"Fixture {cid}", inv, fuel, o2, kpa, Z_ST.get(cid), "Fixture source", None,
+          "Fixture note") for cid, inv, fuel, o2, kpa in ROWS],
+        schema=["case_id", "title", "investigation", "fuel", "o2_pct", "pressure_kpa", "z_st",
                 "source_label", "source_url", "note"],
         orient="row",
     ).write_parquet(tmp_path / "catalogue.parquet")

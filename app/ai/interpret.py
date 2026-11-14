@@ -38,6 +38,7 @@ Supported filters:
 - fuel: list of fuels, only from the valid values below
 - o2_pct: range of oxygen concentration in percentage points (0-100)
 - pressure_kpa: range of absolute pressure in kPa
+- z_st: range of the stoichiometric mixture fraction Zst (0-1, no unit)
 
 Rules:
 - Return the complete new filter state. Start from the current filters and change only what \
@@ -51,7 +52,7 @@ number, leave that filter as it is and add a warning asking for a number.
 - If the user gives one approximate value ("about 34% oxygen"), use that value +/-2 for o2_pct \
 or +/-10% for pressure_kpa, and add a warning stating the range you used.
 - If the user asks for a fuel or investigation that is not in the valid values, or for \
-anything these four filters cannot express (gravity, materials, outcomes, ...), do not guess: \
+anything these filters cannot express (gravity, materials, outcomes, ...), do not guess: \
 leave the filters as they are and add a warning saying what is not available.
 - The known data bounds are only information; a range outside them is allowed.
 - Write warnings in the user's language, one short sentence each. No warning when the request \

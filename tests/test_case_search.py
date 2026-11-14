@@ -24,7 +24,7 @@ def test_no_filters_returns_everything_ordered_with_nulls(client, kwargs):
     assert body["total"] == 6
     assert body["items"][4] == {
         "case_id": "T-005", "title": "Fixture T-005", "investigation": "INV-B",
-        "fuel": None, "o2_pct": None, "pressure_kpa": 101.3,
+        "fuel": None, "o2_pct": None, "pressure_kpa": 101.3, "z_st": None,
     }
     assert body["items"][5]["o2_pct"] is None  # NaN in the catalogue is unknown
 
@@ -37,6 +37,8 @@ def test_no_filters_returns_everything_ordered_with_nulls(client, kwargs):
     ({"o2_pct": {"min": 21, "max": 30}}, ["T-001", "T-003", "T-004"]),
     ({"pressure_kpa": {"min": 101.3, "max": 101.3}}, ["T-001", "T-003", "T-005"]),
     ({"fuel": ["methane"], "o2_pct": {"max": 21}, "pressure_kpa": {"min": 100}}, ["T-001"]),
+    ({"z_st": {"min": 0.25}}, ["T-002", "T-003"]),  # unknown Zst fails the constraint
+    ({"z_st": {"max": 0.25}, "fuel": ["methane"]}, ["T-001", "T-002"]),
     ({"pressure_kpa": {"min": 5000}}, []),  # outside observed bounds is valid
     ({"investigation": ["INV-B"], "o2_pct": {"min": 30}}, []),
 ])
@@ -57,6 +59,7 @@ def test_filters(client, filters, expected):
     {"filters": {"o2_pct": {"min": -1}}},
     {"filters": {"o2_pct": {"min": 21, "step": 1}}},
     {"filters": {"pressure_kpa": {"min": -0.1}}},
+    {"filters": {"z_st": {"max": 1.5}}},
 ])
 def test_invalid_filters_are_rejected(client, payload):
     assert client.post(URL, json=payload).status_code == 422
@@ -82,6 +85,7 @@ def test_filter_options_come_from_the_catalogue(client):
         "fuel": ["ethylene", "methane"],
         "o2_pct": {"min": 21.0, "max": 40.0},  # null and NaN are not bounds
         "pressure_kpa": {"min": 50.0, "max": 200.0},
+        "z_st": {"min": 0.1, "max": 0.3},
     }
 
 

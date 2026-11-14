@@ -19,6 +19,7 @@ class FilterOptions(BaseModel):
     fuel: list[str]
     o2_pct: Bounds | None
     pressure_kpa: Bounds | None
+    z_st: Bounds | None
 
 
 @router.get("/filters")

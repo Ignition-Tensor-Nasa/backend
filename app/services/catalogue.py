@@ -16,11 +16,12 @@ CURATED_DIR = Path(
     or Path(__file__).resolve().parents[2] / "data" / "curated"
 )
 CATEGORY_KEYS = ("investigation", "fuel")
-RANGE_KEYS = ("o2_pct", "pressure_kpa")
+RANGE_KEYS = ("o2_pct", "pressure_kpa", "z_st")
 SUMMARY_COLUMNS = ("case_id", "title", *CATEGORY_KEYS, *RANGE_KEYS)
 
 O2Pct = Annotated[float, Field(ge=0, le=100, allow_inf_nan=False)]
 PressureKpa = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+Fraction = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 Categories = Annotated[list[str], Field(min_length=1)]
 
 
@@ -50,6 +51,11 @@ class PressureRange(_Range):
     max: PressureKpa | None = None
 
 
+class FractionRange(_Range):
+    min: Fraction | None = None
+    max: Fraction | None = None
+
+
 class Filters(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -57,6 +63,7 @@ class Filters(BaseModel):
     fuel: Categories | None = None
     o2_pct: O2Range | None = None
     pressure_kpa: PressureRange | None = None
+    z_st: FractionRange | None = None  # stoichiometric mixture fraction (B10)
 
 
 @lru_cache(maxsize=1)

@@ -20,6 +20,7 @@ class CaseSummary(BaseModel):
     fuel: str | None
     o2_pct: float | None
     pressure_kpa: float | None
+    z_st: float | None
 
 
 class Column(BaseModel):

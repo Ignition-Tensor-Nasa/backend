@@ -128,6 +128,7 @@ def flex_cases(data_dir: Path, entries: list[dict]):
             "fuel": fuel,
             "o2_pct": o2_pct,
             "pressure_kpa": kpa,
+            "z_st": None,  # not given for droplet tests
             "source_label": f"NASA PSI-39 CFI, {test_id} (CIR {pdf['cir']}): {SHEET}; "
                             f"{test_id}_Summary.pdf; {test_id}_*Data.txt",
             "source_url": None,

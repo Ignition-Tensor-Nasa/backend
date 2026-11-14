@@ -19,7 +19,8 @@ def test_live_answer_is_validated_and_nulls_are_dropped(client, monkeypatch):
     def fake(text, current, options):
         seen.update(text=text, current=current, options=options)
         return {"filters": {"investigation": None, "fuel": ["methane"],
-                            "o2_pct": {"min": 30, "max": None}, "pressure_kpa": None},
+                            "o2_pct": {"min": 30, "max": None}, "pressure_kpa": None,
+                            "z_st": None},
                 "warnings": []}
 
     monkeypatch.setattr(ai, "ask_provider", fake)
@@ -98,8 +99,8 @@ def test_invalid_requests_are_422(client, monkeypatch, payload):
 
 
 def test_schema_offers_only_catalogue_values():
-    schema = ai._schema({"investigation": ["INV-A"], "fuel": [], "o2_pct": None, "pressure_kpa": None})
+    schema = ai._schema({"investigation": ["INV-A"], "fuel": []})
     filters = schema["properties"]["filters"]
     assert filters["properties"]["investigation"]["anyOf"][0]["items"]["enum"] == ["INV-A"]
     assert "enum" not in filters["properties"]["fuel"]["anyOf"][0]["items"]
-    assert filters["required"] == ["investigation", "fuel", "o2_pct", "pressure_kpa"]
+    assert filters["required"] == ["investigation", "fuel", "o2_pct", "pressure_kpa", "z_st"]

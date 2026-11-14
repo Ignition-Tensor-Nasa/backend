@@ -217,6 +217,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             "fuel": fuel_label and re.sub(r"^\d+%\s*", "", fuel_label),
             "o2_pct": o2_pct,
             "pressure_kpa": kpa,
+            "z_st": number(row, "Zst"),  # as tabulated by the source
             "source_label": f"NASA PSI-159 ACME CFI-G, test point {test_id}: "
                             f"{TABLE}; {prefix}data.csv",
             "source_url": None,
@@ -243,7 +244,7 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
     if not cases:
         raise SystemExit("No case could be prepared.")
     schema = {key: pl.String for key in cases[0]} | {
-        "o2_pct": pl.Float64, "pressure_kpa": pl.Float64}
+        "o2_pct": pl.Float64, "pressure_kpa": pl.Float64, "z_st": pl.Float64}
     catalogue = pl.DataFrame(cases, schema=schema).sort("case_id")
     catalogue.write_parquet(out_dir / "catalogue.parquet")
     (out_dir / "datasets.json").write_text(

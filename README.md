@@ -124,6 +124,14 @@ in the curated catalogue (`null` bounds when no case has that value):
  "pressure_kpa": {"min": 50.663, "max": 506.625}}
 ```
 
+### Extra filter: stoichiometric mixture fraction (B10)
+
+`z_st` is a numeric range filter (0 to 1, no unit) on the `Zst` column of the
+ACME CFI-G experimental table, used as tabulated. Droplet (FLEX) cases have no
+such value, so any active `z_st` constraint excludes them. Example: the four
+runs with the highest tabulated Zst, `{"filters": {"z_st": {"min": 0.25}}}`. It is part of
+`FilterOptions`, `CaseSummary`, search validation and the assistant's schema.
+
 ## Case search (B03)
 
 `POST /api/v1/cases/search` filters the curated case catalogue and returns
