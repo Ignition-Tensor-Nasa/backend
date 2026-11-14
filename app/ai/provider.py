@@ -51,10 +51,15 @@ def _parse_json(content: str) -> dict:
 
 
 def _status_error(status: int) -> AIUnavailable:
-    if status in (401, 403):
+    if status == 401:
         return AIUnavailable("The AI provider rejected the server's credentials.")
+    if status == 403:
+        return AIUnavailable("The AI provider rejected the server's credentials or model access.")
     if status == 429:
         return AIUnavailable("The AI provider is rate limiting requests; try again shortly.")
+    if status in (400, 404):
+        return AIUnavailable(f"The AI provider rejected the request (HTTP {status}); "
+                             "check PSI_AI_MODEL and the provider configuration.")
     return AIUnavailable(f"The AI provider returned an error (HTTP {status}).")
 
 
@@ -146,16 +151,25 @@ def get_provider() -> JSONProvider:
     """Select an adapter using server-side configuration."""
     settings = ai_settings()
     name = settings.get("PSI_AI_PROVIDER", "").strip().lower()
+    model = settings.get("PSI_AI_MODEL", "").strip()
+    problems = []
     if name not in PROVIDERS:
         choices = ", ".join(PROVIDERS)
-        raise AIUnavailable(f"The AI assistant is not configured (set PSI_AI_PROVIDER to one of: {choices}).")
-    adapter, key_name = PROVIDERS[name]
-    model = settings.get("PSI_AI_MODEL", "").strip()
+        problems.append(f"PSI_AI_PROVIDER (choose: {choices})")
     if not model:
-        raise AIUnavailable("The AI assistant is not configured (set PSI_AI_MODEL).")
-    key = settings.get(key_name, "").strip()
-    if not key:
-        raise AIUnavailable(f"The AI assistant is not configured (set {key_name}).")
+        problems.append("PSI_AI_MODEL")
+    if name in PROVIDERS:
+        adapter, key_name = PROVIDERS[name]
+        key = settings.get(key_name, "").strip()
+        if not key:
+            problems.append(key_name)
+    else:
+        key_names = list(dict.fromkeys(key_name for _, key_name in PROVIDERS.values()))
+        if not any(settings.get(key_name, "").strip() for key_name in key_names):
+            problems.append(f"the selected provider's API key ({', '.join(key_names)})")
+    if problems:
+        raise AIUnavailable("The AI assistant is not configured; set " + ", ".join(problems)
+                            + " in the server's .env or environment.")
     return adapter(model, key)
 
 

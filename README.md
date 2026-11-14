@@ -231,6 +231,12 @@ endpoint. `text` is trimmed, 1 to 4000 characters.
 Any assistant failure answers 503 with a readable `detail`; manual search keeps
 working. Configuration errors, request failures and incomplete responses do not
 trigger demo mode. Invalid `PSI_AI_MODE` or provider values also return 503.
+When live settings are missing, `detail` names the required variables; it never
+includes their values. For example:
+
+```json
+{"detail": "The AI assistant is not configured; set PSI_AI_MODEL, OPENROUTER_API_KEY in the server's .env or environment."}
+```
 
 ### Live provider configuration
 
