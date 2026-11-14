@@ -20,19 +20,24 @@ ATM_TO_KPA = 101.325
 MMHG_TO_KPA = 101.325 / 760
 FUELS = {"C12H26": "dodecane"}  # the summary PDFs of the selected tests name it "Dodecane"
 
-# kind -> (source time column, label, {source column: (label, unit)}, default y)
+TIME_NOTE = ("Every source sample kept, no sampling or interpolation; cells the source left "
+             "unparsable are null. Time is the file's own time column; the source does not "
+             "document how it is synchronised with the case's other datasets.")
+# kind -> (source time column, label, {source column: (label, unit)}, default y, note)
 # Units are the ones stated in the source column names.
 KINDS = {
     "DropletData": ("DropletTime_sec", "Droplet diameter history", {
-        "DropletDiameter_mm": ("Droplet diameter", "mm")}, ["DropletDiameter_mm"]),
+        "DropletDiameter_mm": ("Droplet diameter", "mm")}, ["DropletDiameter_mm"], TIME_NOTE),
     "CoolFlameData": ("CoolFlameTime_s", "Cool-flame diameter", {
         "CoolFlameDiameterFWHM_mm": ("Cool-flame diameter (FWHM)", "mm"),
         "CoolFlameDiameterP2P_mm": ("Cool-flame diameter (peak to peak)", "mm")},
-        ["CoolFlameDiameterFWHM_mm", "CoolFlameDiameterP2P_mm"]),
+        ["CoolFlameDiameterFWHM_mm", "CoolFlameDiameterP2P_mm"], TIME_NOTE),
     "RadiometerData": ("RadiometerTime_sec", "Radiometer power", {
         "TotalWideBandPower_W": ("Total wide-band power", "W"),
         "TotalNarrowBandPower_W": ("Total narrow-band power", "W")},
-        ["TotalNarrowBandPower_W"]),
+        ["TotalNarrowBandPower_W"],
+        TIME_NOTE + " Wide-band values are large and negative in the source file and are "
+                    "shown as provided."),
 }
 
 
@@ -120,11 +125,11 @@ def flex_cases(data_dir: Path, entries: list[dict]):
             if str(row["CIR"]).strip().lower() != pdf["cir"].lower():
                 raise Skip("CIR run ID differs between the Master Sheet and the summary PDF")
             exports = []
-            for kind, (time, label, columns, default_y) in KINDS.items():
+            for kind, (time, label, columns, default_y, note) in KINDS.items():
                 frame = read_tsv(family / "txt" / f"{test_id}_{kind}.txt", time, columns)
                 exports.append((descriptor(
                     f"{test_id}-{kind.removesuffix('Data').lower()}", test_id, label, columns,
-                    default_y, time_label="Time (source time base)"), frame))
+                    default_y, note, time_label="Time (source time base)"), frame))
             fit = None
             if "d2_fit" in entry:
                 window = entry["d2_fit"]
@@ -134,7 +139,12 @@ def flex_cases(data_dir: Path, entries: list[dict]):
                     f"D² history with linear fit (K = {fit['k_mm2_s']} mm²/s)",
                     {"D2_mm2": ("Droplet diameter squared", "mm²"),
                      "D2_fit_mm2": ("Least-squares line (fit window only)", "mm²")},
-                    ["D2_mm2", "D2_fit_mm2"], time_label="Time (source time base)"), frame))
+                    ["D2_mm2", "D2_fit_mm2"],
+                    f"Derived for this project, not a NASA series: D² = droplet diameter squared; "
+                    f"the line is an ordinary least-squares fit over {fit['t_min_s']:g}-"
+                    f"{fit['t_max_s']:g} s (hand-chosen window, {fit['n']} samples, R² = "
+                    f"{fit['r2']}) and is null outside that window. No uncertainty band.",
+                    time_label="Time (source time base)"), frame))
         except Skip as reason:
             print(f"SKIPPED {test_id}: {reason}")
             continue

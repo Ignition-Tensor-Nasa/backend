@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from app.services.catalogue import (
-    Filters, case_detail, case_neighbors, dataset_csv_path, search_cases)
+    Filters, case_detail, case_neighbors, dataset_csv, search_cases)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -119,8 +119,11 @@ def neighbors(case_id: str) -> Neighbors:
 
 
 @router.get("/datasets/{dataset_id}/csv")
-def dataset_csv(dataset_id: str) -> FileResponse:
-    path = dataset_csv_path(dataset_id)
-    if path is None:
+def dataset_export(dataset_id: str) -> Response:
+    """Optional download generated from prepared Parquet; charts use /data instead."""
+    content = dataset_csv(dataset_id)
+    if content is None:
         raise HTTPException(404, f"Unknown dataset: {dataset_id}")
-    return FileResponse(path, media_type="text/csv; charset=utf-8", filename=path.name)
+    # dataset_id is an allowlisted key of datasets.json, so it is safe in the header.
+    return Response(content, media_type="text/csv; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="{dataset_id}.csv"'})

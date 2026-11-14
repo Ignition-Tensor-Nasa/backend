@@ -151,17 +151,37 @@ def case_detail(case_id: str) -> dict | None:
             "explanation": explanation}
 
 
-def dataset_csv_path(dataset_id: str) -> Path | None:
-    """File of an allowlisted dataset; None for unknown IDs."""
+def dataset_frame(dataset_id: str) -> tuple[dict, pl.DataFrame] | None:
+    """(descriptor, prepared measurements) of an allowlisted dataset; None for unknown IDs.
+
+    Columns follow the descriptor, rows are ordered by the default x column, and
+    non-finite numbers become null. Only prepared Parquet is read, never raw sources.
+    """
     dataset = load_datasets().get(dataset_id)
     if dataset is None:
         return None
-    folder = (CURATED_DIR / "csv").resolve()
+    folder = (CURATED_DIR / "parquet").resolve()
     path = (folder / dataset["file"]).resolve()
     # The name comes from datasets.json, never the request; still refuse to leave the folder.
     if path.parent != folder or not path.is_file():
-        raise CatalogueUnavailable(f"CSV of dataset {dataset_id} is missing; rerun the B01 data preparation.")
-    return path
+        raise CatalogueUnavailable(
+            f"Prepared data of dataset {dataset_id} is missing; rerun the B01 data preparation.")
+    keys = [column["key"] for column in dataset["columns"]]
+    frame = pl.read_parquet(path)
+    if missing := set(keys) - set(frame.columns):
+        raise CatalogueUnavailable(f"Dataset {dataset_id} lacks columns: {sorted(missing)}")
+    floats = cs.float()
+    frame = frame.select(keys).with_columns(
+        pl.when(floats.is_finite()).then(floats).name.keep())
+    if dataset["default_x"] in keys:
+        frame = frame.sort(dataset["default_x"], maintain_order=True, nulls_last=True)
+    return dataset, frame
+
+
+def dataset_csv(dataset_id: str) -> str | None:
+    """CSV export generated from the prepared Parquet; None for unknown IDs."""
+    found = dataset_frame(dataset_id)
+    return None if found is None else found[1].write_csv()
 
 
 def filter_options() -> dict:

@@ -19,12 +19,13 @@ ROWS = [
     ("T-006", "INV-B", "ethylene", float("nan"), 200.0),
 ]
 Z_ST = {"T-001": 0.1, "T-002": 0.25, "T-003": 0.3}  # unknown for the others
-CSV = "time_s,signal\n0.0,1.5\n0.5,\n"
+CSV = "time_s,signal\n0.0,1.5\n0.5,\n1.0,\n2.0,3.0\n"  # export of the fixture series below
 
 
 def dataset(dataset_id, case_id, file):
     return {
         "dataset_id": dataset_id, "case_id": case_id, "label": "Fixture series", "file": file,
+        "note": "Fixture note about sampling.",
         "columns": [
             {"key": "time_s", "label": "Elapsed time", "data_type": "number", "unit": "s"},
             {"key": "signal", "label": "Signal", "data_type": "number", "unit": None},
@@ -51,13 +52,15 @@ def client(tmp_path, monkeypatch):
                 "source_label", "source_url", "note", "explanation", "explanation_origin"],
         orient="row",
     ).write_parquet(tmp_path / "catalogue.parquet")
-    (tmp_path / "csv").mkdir()
-    (tmp_path / "csv" / "T-001-a.csv").write_text(CSV, "utf-8")
-    (tmp_path / "secret.csv").write_text("outside the csv folder", "utf-8")
+    (tmp_path / "parquet").mkdir()
+    # Stored out of time order, with a missing sample, a NaN and an extra column.
+    pl.DataFrame({"time_s": [2.0, 0.0, 0.5, 1.0], "signal": [3.0, 1.5, None, float("nan")],
+                  "not_described": [1, 2, 3, 4]}).write_parquet(tmp_path / "parquet" / "T-001-a.parquet")
+    pl.DataFrame({"time_s": [0.0], "signal": [42.0]}).write_parquet(tmp_path / "secret.parquet")
     (tmp_path / "datasets.json").write_text(json.dumps({"datasets": [
-        dataset("T-001-a", "T-001", "T-001-a.csv"),
-        dataset("T-001-gone", "T-001", "T-001-gone.csv"),
-        dataset("T-002-escape", "T-002", "../secret.csv"),
+        dataset("T-001-a", "T-001", "T-001-a.parquet"),
+        dataset("T-001-gone", "T-001", "T-001-gone.parquet"),
+        dataset("T-002-escape", "T-002", "../secret.parquet"),
     ]}), "utf-8")
     (tmp_path / "events.json").write_text(json.dumps({"method": "fixture", "events": {"T-001": [
         {"label": "Ignition", "time_s": 0.5, "dataset_id": "T-001-a", "source": "fixture.txt"}]}}), "utf-8")

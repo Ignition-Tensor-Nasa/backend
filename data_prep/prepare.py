@@ -1,4 +1,4 @@
-"""B01: build the curated demo catalogue and browser-ready CSVs from raw NASA PSI files.
+"""B01: build the curated demo catalogue and measurement Parquet files from raw NASA PSI files.
 
 Run from backend/:  python3 -m data_prep.prepare --data-dir ../data_nasa
 
@@ -44,6 +44,15 @@ CHANNELS = {
     "RadiometerOffset": "Offset radiometer (raw)",
 }
 SETPOINTS = {f"MFCA{n}Setpoint(V)": f"MFC A{n} setpoint" for n in (1, 2, 3)}
+SENSOR_NOTE = (
+    "Full raw recording, every sample kept (documented rate 125 Hz); no sampling or "
+    "interpolation. Channel units are not stated in the source files, so values are "
+    "unconverted. time_s counts from the first sample."
+)
+SETPOINT_NOTE = (
+    "Commanded setpoint log as recorded; entries with the same timestamp are in the source. "
+    "time_s shares the zero of the sensor recording, so the first entries can be slightly negative."
+)
 TP_EVENTS = ("Ignition and retraction", "Extinction detected", "MFCs off")
 ENDINGS = {"SE": "self-extinction (SE)", "FT": "flow termination (FT)"}
 
@@ -96,11 +105,15 @@ def read_series(path: Path, test_id: str, wanted: dict,
     return frame, start
 
 
-def descriptor(dataset_id, case_id, label, columns, default_y, time_label="Elapsed time"):
-    """Dataset descriptor; `columns` maps key -> (label, unit) and time_s comes first."""
+def descriptor(dataset_id, case_id, label, columns, default_y, note,
+               time_label="Elapsed time"):
+    """Dataset descriptor; `columns` maps key -> (label, unit) and time_s comes first.
+
+    `note` states sampling and quality facts a chart reader needs.
+    """
     return {
         "dataset_id": dataset_id, "case_id": case_id, "label": label,
-        "file": f"{dataset_id}.csv",
+        "file": f"{dataset_id}.parquet", "note": note,
         "columns": [{"key": "time_s", "label": time_label, "data_type": "number", "unit": "s"}]
         + [{"key": key, "label": text, "data_type": "number", "unit": unit}
            for key, (text, unit) in columns.items()],
@@ -242,14 +255,14 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             exports = [(descriptor(
                 f"{case_id}-sensors", case_id, "Sensor recording (raw channels)",
                 {key: (label, None) for key, label in CHANNELS.items()},
-                ["Radiometer3+30LoGain", "PMT1", "MFCA3FuelFlow"]), data)]
+                ["Radiometer3+30LoGain", "PMT1", "MFCA3FuelFlow"], SENSOR_NOTE), data)]
             try:
                 setpoints, _ = read_series(
                     family / "csv" / (prefix + "mfcSetpoints.csv"), test_id, SETPOINTS, start)
                 exports.append((descriptor(
                     f"{case_id}-mfc-setpoints", case_id, "MFC setpoints (commanded)",
                     {key: (label, "V") for key, label in SETPOINTS.items()},
-                    list(SETPOINTS)), setpoints))
+                    list(SETPOINTS), SETPOINT_NOTE), setpoints))
             except Skip as reason:
                 print(f"  {case_id}: no setpoint dataset ({reason})")
         except Skip as reason:
@@ -288,15 +301,16 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
     from data_prep.similarity import METRIC, nearest_neighbours
 
     manifest = json.loads((Path(__file__).parent / "manifest.json").read_text("utf-8"))
-    csv_dir = out_dir / "csv"
-    shutil.rmtree(csv_dir, ignore_errors=True)
-    csv_dir.mkdir(parents=True)
+    shutil.rmtree(out_dir / "csv", ignore_errors=True)  # output of earlier versions
+    parquet_dir = out_dir / "parquet"
+    shutil.rmtree(parquet_dir, ignore_errors=True)
+    parquet_dir.mkdir(parents=True)
     cases, datasets, events = [], [], {}
     for case, exports in (*cfig_cases(data_dir, manifest["cases"]),
                           *flex_cases(data_dir, manifest.get("flex_cases", []))):
         for meta, frame in exports:
             assert frame.columns == [column["key"] for column in meta["columns"]]
-            frame.write_csv(csv_dir / meta["file"])
+            frame.write_parquet(parquet_dir / meta["file"])
             datasets.append(meta)
         events[case["case_id"]] = case.pop("_events", [])
         cases.append(case)
@@ -318,8 +332,8 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         if not allowed or (item["tags"] != ["unknown"] and not item["evidence"]):
             raise SystemExit(f"research_context.json: {name} needs valid tags with evidence")
     (out_dir / "context.json").write_text(json.dumps(context, ensure_ascii=False, indent=1), "utf-8")
-    size = sum(path.stat().st_size for path in csv_dir.iterdir()) / 1e6
-    print(f"{catalogue.height} cases, {len(datasets)} datasets, {size:.1f} MB of CSV -> {out_dir}")
+    size = sum(path.stat().st_size for path in parquet_dir.iterdir()) / 1e6
+    print(f"{catalogue.height} cases, {len(datasets)} datasets, {size:.1f} MB of Parquet -> {out_dir}")
 
 
 if __name__ == "__main__":
