@@ -1,8 +1,15 @@
 import pytest
 
 from app.ai import interpret as ai
+from app.ai import provider as ai_provider
 
 URL = "/api/v1/filters/interpret"
+
+
+@pytest.fixture(autouse=True)
+def live_by_default(monkeypatch, tmp_path):
+    monkeypatch.setattr(ai_provider, "AI_CONFIG_PATH", tmp_path / ".env")
+    monkeypatch.setenv("PSI_AI_MODE", "live")
 
 
 def provider(answer):
@@ -38,7 +45,7 @@ def test_live_answer_is_validated_and_nulls_are_dropped(client, monkeypatch):
 def test_unchanged_answer_gets_a_warning(client, monkeypatch):
     monkeypatch.setattr(ai, "ask_provider", provider(
         {"filters": {"investigation": None, "fuel": ["methane"], "o2_pct": None,
-                     "pressure_kpa": None}, "warnings": []}))
+                     "pressure_kpa": None, "z_st": None}, "warnings": []}))
     body = client.post(URL, json={"text": "something nice", "current_filters": {"fuel": ["methane"]}}).json()
     assert body["filters"] == {"fuel": ["methane"]} and len(body["warnings"]) == 1
 
@@ -51,6 +58,14 @@ def test_unchanged_answer_gets_a_warning(client, monkeypatch):
     {"filters": "pl.col('fuel') == 'methane'", "warnings": []},    # not a filter object
     {"warnings": []},
     {"filters": {}, "warnings": None},
+    {"filters": {"investigation": None, "fuel": None, "o2_pct": None,
+                 "pressure_kpa": None, "z_st": None}, "warnings": "warning"},
+    {"filters": {"investigation": None, "fuel": None, "o2_pct": None,
+                 "pressure_kpa": None, "z_st": None}, "warnings": [42]},
+    {"filters": {"investigation": None, "fuel": None, "o2_pct": None,
+                 "pressure_kpa": None, "z_st": None}, "warnings": [], "extra": 1},
+    {"filters": {"investigation": None, "fuel": None, "o2_pct": {"min": "21", "max": None},
+                 "pressure_kpa": None, "z_st": None}, "warnings": []},
     "not json",
 ])
 def test_invalid_provider_output_is_never_applied(client, monkeypatch, answer):
@@ -86,6 +101,13 @@ def test_demo_state_that_does_not_fit_the_catalogue_is_not_applied(client, monke
     monkeypatch.setattr(ai, "DEMO_PROMPTS", {"show butane": {"fuel": ["butane"]}})
     body = client.post(URL, json={"text": "show butane"}).json()
     assert body["filters"] == {} and body["warnings"]
+
+
+def test_invalid_mode_is_not_silently_treated_as_live(client, monkeypatch):
+    monkeypatch.setenv("PSI_AI_MODE", "demoo")
+    monkeypatch.setattr(ai, "ask_provider", never_called)
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 503 and "PSI_AI_MODE" in response.json()["detail"]
 
 
 @pytest.mark.parametrize("payload", [

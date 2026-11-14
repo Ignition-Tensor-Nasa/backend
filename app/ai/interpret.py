@@ -5,9 +5,10 @@ as manual search before it is returned; nothing the model writes is executed.
 """
 
 import json
-import os
 
-from app.ai.provider import AIUnavailable, call_json
+from jsonschema import Draft202012Validator, ValidationError as SchemaValidationError
+
+from app.ai.provider import AIUnavailable, ai_settings, call_json
 from app.services.catalogue import CATEGORY_KEYS, RANGE_KEYS, Filters, check_categories, filter_options
 
 # Rehearsed prompts -> reviewed complete filter states (PSI_AI_MODE=demo only).
@@ -83,7 +84,7 @@ def _schema(options: dict) -> dict:
 
 
 def ask_provider(text: str, current: dict, options: dict) -> dict:
-    """One Claude call returning {"filters": ..., "warnings": [...]} as parsed JSON."""
+    """Ask the selected provider for a complete filter state and warnings."""
     return call_json(SYSTEM, json.dumps({
         "valid_values": {key: options[key] for key in CATEGORY_KEYS},
         "known_data_bounds": {key: options[key] for key in RANGE_KEYS},
@@ -109,7 +110,9 @@ def _validated(raw) -> Filters:
 
 def interpret(text: str, current: Filters) -> tuple[Filters, list[str], str]:
     """(complete replacement filters, warnings, mode). Raises AIUnavailable."""
-    mode = "demo" if os.environ.get("PSI_AI_MODE", "live").strip().lower() == "demo" else "live"
+    mode = ai_settings().get("PSI_AI_MODE", "live").strip().lower()
+    if mode not in ("live", "demo"):
+        raise AIUnavailable("The AI assistant is not configured (set PSI_AI_MODE to live or demo).")
     if mode == "demo":
         reviewed = DEMO_PROMPTS.get(" ".join(text.casefold().replace("–", "-").split()).rstrip(".!?"))
         if reviewed is None:
@@ -120,13 +123,16 @@ def interpret(text: str, current: Filters) -> tuple[Filters, list[str], str]:
         except ValueError:
             return current, ["Demo mode: the rehearsed filters do not fit the current "
                              "catalogue, so the filters were left unchanged."], mode
-    answer = ask_provider(text, current.model_dump(exclude_none=True), filter_options())
+    options = filter_options()
+    answer = ask_provider(text, current.model_dump(exclude_none=True), options)
     try:
+        # Structured-output support differs between models; never trust it alone.
+        Draft202012Validator(_schema(options)).validate(answer)
         filters = _validated(answer["filters"])
-        warnings = [str(item) for item in answer["warnings"]]
-    except (ValueError, KeyError, TypeError) as error:
+        warnings = answer["warnings"]
+    except (ValueError, KeyError, TypeError, SchemaValidationError):
         raise AIUnavailable("The AI provider proposed filters that are not valid; "
-                            "nothing was changed.") from error
+                            "nothing was changed.") from None
     if filters == current and not warnings:
         warnings = ["No supported filter change was recognised in the description."]
     return filters, warnings, mode

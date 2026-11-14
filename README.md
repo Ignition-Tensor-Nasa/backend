@@ -12,8 +12,8 @@ app/
   main.py                # App, CORS, error handlers, router registration
   routes/                # REST endpoints (hello, filters, cases, datasets)
   services/catalogue.py  # Curated catalogue, filter validation and search (Polars)
-  ai/interpret.py        # Description -> filters (Claude call or demo mode)
-  ai/provider.py         # The one schema-constrained Claude call
+  ai/interpret.py        # Description -> validated filters (live or demo)
+  ai/provider.py         # Schema-constrained provider adapters
 data_prep/
   prepare.py             # Builds data/curated/ from raw NASA files (run this)
   manifest.json          # Hand-reviewed list of selected tests
@@ -43,7 +43,7 @@ python3 -m pip install -r requirements.txt
 
 ### Using globally installed libraries
 
-If FastAPI, Uvicorn, Polars and the Anthropic SDK are already installed for your Python interpreter
+If FastAPI, Uvicorn, Polars, httpx, jsonschema, python-dotenv and the Anthropic SDK are already installed for your Python interpreter
 in versions compatible with `requirements.txt`, no installation is needed.
 
 ### Start the server
@@ -54,10 +54,10 @@ With either setup, run:
 python3 -m uvicorn app.main:app --reload
 ```
 
-Optional settings are environment variables listed in `.env.example`
-(`cp .env.example .env`, edit, then `set -a; . ./.env; set +a` before starting).
-The server starts without any of them and without an LLM key. CORS allows the
-local frontend origins in `CORS_ORIGINS`.
+Optional settings are listed in `.env.example`. Copy it to `.env` and edit it:
+AI settings are read automatically from the backend's `.env`; for other settings
+such as `CORS_ORIGINS` and `PSI_CURATED_DIR`, load it before starting with
+`set -a; . ./.env; set +a`. The server starts without any of them or an LLM key.
 
 Visit <http://127.0.0.1:8000/> or run:
 
@@ -219,19 +219,67 @@ returns `{"filters": Filters, "warnings": string[], "mode": "live" | "demo"}`.
 `filters` is the complete replacement state, ready to send to the search
 endpoint. `text` is trimmed, 1 to 4000 characters.
 
-- **live** (default): one Claude call (`PSI_AI_MODEL`, default
-  `claude-opus-5-5`) with a JSON schema limited to the catalogue's categories.
-  The answer is validated with the same rules as manual search before it is
-  returned; invalid or invented output answers 503 and changes nothing. Needs
-  `ANTHROPIC_API_KEY` in the server environment. Refusal fallback to the API's
-  default fallback model is enabled.
+- **live** (default): one call to the selected Anthropic or OpenRouter model,
+  with a JSON schema limited to the catalogue's categories. The full response
+  is checked against the schema and the same filter rules as manual search;
+  invalid or invented output answers 503 and changes nothing.
 - **demo** (`PSI_AI_MODE=demo`): no network. Only the rehearsed prompts in
   `app/ai/interpret.py` (`DEMO_PROMPTS`) return reviewed filter states, always
   labelled `"mode": "demo"`; any other prompt returns the filters unchanged
   plus a warning. A failed live call is never replaced by a demo answer.
 
 Any assistant failure answers 503 with a readable `detail`; manual search keeps
-working.
+working. Configuration errors, request failures and incomplete responses do not
+trigger demo mode. Invalid `PSI_AI_MODE` or provider values also return 503.
+
+### Live provider configuration
+
+Copy `.env.example` to `.env` in the backend directory and edit the AI settings
+there. The backend and offline PDF tool read that file automatically, regardless
+of the working directory. Alternatively, set process environment variables;
+those override `.env` values, including empty values. Changes to `.env` are read
+on subsequent calls; restart the server after changing its environment. Use
+literal values (variable expansion is not supported in the automatically read
+file). Keep keys on the server, not in the frontend or API requests, and never
+commit them. `.env` is git-ignored.
+
+Choose one of the following examples for `.env` and replace the placeholder key:
+
+```sh
+# Anthropic
+PSI_AI_MODE=live
+PSI_AI_PROVIDER=anthropic
+PSI_AI_MODEL=claude-opus-5-5
+ANTHROPIC_API_KEY=your-anthropic-key
+```
+
+```sh
+# OpenRouter
+PSI_AI_MODE=live
+PSI_AI_PROVIDER=openrouter
+PSI_AI_MODEL=provider/model-name
+OPENROUTER_API_KEY=your-openrouter-key
+```
+
+An explicit provider, model and matching key are required for live mode; there
+is no model default in the code. Replace `provider/model-name` with an actual OpenRouter model that supports
+structured JSON-schema output. The request requires an upstream supporting
+the schema; unavailable models or incompatible providers return an error.
+The same `PSI_AI_MODEL` variable is used by both providers, so update it when
+switching. Anthropic's existing API-side refusal fallback to its default
+fallback model remains enabled; this is not a demo response.
+
+Each live request sends the supported-filter and unit rules, catalogue values
+and bounds, current filters, and user description to the selected provider.
+OpenRouter may route the request to the chosen model's upstream provider. Review
+their privacy and pricing terms before enabling live mode. Keys are not returned
+to clients or logged by this backend; errors do not include provider response
+bodies or exception messages.
+
+For a network-free rehearsal, use `PSI_AI_MODE=demo`; no model or key is needed.
+The provider interface is independent of interpretation, so other adapters can
+be added without changing the filter logic. Codex and Antigravity adapters are
+not implemented; their intended API or CLI integration must be specified first.
 
 ## Demo walkthrough
 
@@ -359,11 +407,12 @@ inputs, not the whole corpus.
 python3 -m data_prep.enrich_pdf FLEX-1213 "../data_nasa/CFI_PSI-39/pdf/FLEX-1213_Summary.pdf"
 ```
 
-Reads one PDF page by page (`pdftotext`), asks Claude (schema-constrained, same
-model setting as the assistant) for parameters and timed events stated
+Reads one PDF page by page (`pdftotext`), asks the configured provider
+(schema-constrained, same provider and model settings as the assistant) for parameters and timed events stated
 explicitly for that one test, and writes
 `data_prep/enrichment/<test>.proposed.json` for review. Needs
-`ANTHROPIC_API_KEY`; nothing runs during the demo.
+the selected provider's credentials; it is an explicitly invoked live tool and
+does not use `PSI_AI_MODE=demo`.
 
 - Every value needs a page number and a verbatim quote. The script, not the
   model, checks that the quote is on that page and contains the value;

@@ -2,10 +2,10 @@
 
     python3 -m data_prep.enrich_pdf FLEX-1213 "../data_nasa/CFI_PSI-39/pdf/FLEX-1213_Summary.pdf"
 
-Reads one PDF page by page (pdftotext), asks Claude for the parameters and events
+Reads one PDF page by page (pdftotext), asks the configured provider for parameters and events
 stated explicitly for ONE test, and writes data_prep/enrichment/<test>.proposed.json.
 The proposal never touches the catalogue: a person reviews it and copies accepted
-values into the manifest. Needs ANTHROPIC_API_KEY and poppler's pdftotext.
+values into the manifest. Needs provider credentials and poppler's pdftotext.
 
 Guards applied in code, not left to the model:
 - every proposed value must come with a page number and a verbatim quote that
