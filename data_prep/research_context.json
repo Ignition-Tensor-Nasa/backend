@@ -52,6 +52,13 @@
      "quote": "Evaluate performance of hybrid fire detection"
     }
    ]
+  },
+  "ACME E-FIELD Flames": {
+   "tags": [
+    "unknown"
+   ],
+   "rationale": "The documents shipped with PSI-22 describe the electric-field science and operations; no statement tying the experiment to fire prevention, detection or suppression was reviewed.",
+   "evidence": []
   }
  }
 }

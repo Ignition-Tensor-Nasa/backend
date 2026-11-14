@@ -110,7 +110,7 @@ def overlay(project_id: str, kind: str, channel: str, filters: Filters, align: s
     cases = scoped_search(project_id, filters)
     events = load_events()
     datasets = {d["case_id"]: d for d in load_datasets().values() if _kind(d) == kind}
-    series, skipped_no_ignition, unit, label, x_unit = [], 0, None, channel, "s"
+    series, skipped_no_ignition, unit, label, x_unit, x_label = [], 0, None, channel, "s", "Elapsed time"
     found_channel = False
     for case in cases:
         dataset = datasets.get(case["case_id"])
@@ -138,8 +138,8 @@ def overlay(project_id: str, kind: str, channel: str, filters: Filters, align: s
         if frame.height == 0:
             continue
         series.append((case, frame))
-        unit, label, x_unit = column["unit"], column["label"], next(
-            c["unit"] for c in dataset["columns"] if c["key"] == dataset["default_x"])
+        x_column = next(c for c in dataset["columns"] if c["key"] == dataset["default_x"])
+        unit, label, x_unit, x_label = column["unit"], column["label"], x_column["unit"], x_column["label"]
     if not found_channel:
         raise ValueError(f"No dataset of kind '{kind}' in this project has channel '{channel}'")
     truncated = len(series) > max_series
@@ -153,12 +153,12 @@ def overlay(project_id: str, kind: str, channel: str, filters: Filters, align: s
     if align == "ignition":
         notes.append(f"t = 0 is the '{project.get('ignition_label', IGNITION)}' event of each run; {skipped_no_ignition} "
                      "matching run(s) have no such event and are left out.")
-    else:
+    elif x_unit == "s":
         notes.append("t = 0 is the first sample of each recording; runs are not aligned to an event.")
     if truncated:
         notes.append(f"{len(series)} runs matched; the first {max_series} by case ID are returned.")
     return {"project_id": project_id, "kind": kind,
             "channel": {"key": channel, "label": label, "unit": unit},
-            "x": {"label": "Time since ignition" if align == "ignition" else "Elapsed time",
+            "x": {"label": "Time since ignition" if align == "ignition" else x_label,
                   "unit": x_unit, "align": align},
             "matched": len(series), "series": items, "note": " ".join(notes)}

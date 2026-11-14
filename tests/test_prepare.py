@@ -121,3 +121,26 @@ def test_flame_design_channel_sets_and_explanation(tmp_path):
         "The table gives an adiabatic flame temperature of 2352 K.")
     assert flame_design.explain({"Fuel": "C3H8", "Tad (K)": "RAMPED"}, None, None, None) == (
         "Normal (fuel-inside) flame test with C3H8.")
+
+
+def test_efield_sweep_log_window_and_field_response(tmp_path):
+    from data_prep import efield
+
+    sweep = tmp_path / "x_VoltageSweep.txt"
+    sweep.write_text("testpointName:18073A3,\nefieldMinVoltage:-8000,\nefieldMaxVoltage:-500,\nconcentrationInitial:0.8,\n")
+    assert efield.sweep_parameters(sweep) == {"efieldMinVoltage": -8000.0, "efieldMaxVoltage": -500.0,
+                                              "concentrationInitial": 0.8}
+    assert efield.sweep_parameters(tmp_path / "absent.txt") == {}
+    log = tmp_path / "x_TP.txt"
+    log.write_text("Ignition and retraction: ***\nFlame stabilization #1: 2018-10-17 20:50:09\n"
+                   "MFCs off: 2018-10-17 20:51:29\n")
+    start, end = efield.flame_window(log)
+    assert end - start == 80
+    frame = pl.DataFrame({"time_s": [float(t) for t in range(0, 400)],
+                          "EfieldVoltage": [-(t % 5) * 1.0 for t in range(400)],
+                          "IonCurrent": [0.1 * (t % 5) for t in range(400)]})
+    response = efield.field_response(frame, start - 10, (start, start + 300))
+    assert response.columns == ["time_s", "ion_mean", "ion_min", "ion_max", "n"]
+    assert response["time_s"].to_list() == [-4.0, -3.0, -2.0, -1.0, 0.0]  # x is the field in kV
+    assert response["n"].sum() == 301 - 0  # every sample inside the window
+    assert efield.field_response(frame, 0.0, None) is None

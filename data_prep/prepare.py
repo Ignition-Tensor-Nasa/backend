@@ -117,7 +117,12 @@ def read_series(path: Path, test_id: str, wanted: dict,
     found = re.search(r"Test Point:\s*([^,]+)", preamble)
     if not found or found.group(1).strip() != test_id:
         raise Skip(f"{path.name}: preamble does not name test point {test_id}")
-    raw = pl.read_csv(content, skip_rows=1, schema_overrides={"Time": pl.String})
+    try:
+        # A recording cut off mid-line leaves a short last row: keep the complete columns.
+        raw = pl.read_csv(content, skip_rows=1, schema_overrides={"Time": pl.String},
+                          truncate_ragged_lines=True)
+    except pl.exceptions.ComputeError as error:
+        raise Skip(f"{path.name}: unparsable recording ({str(error).splitlines()[0][:80]})") from error
     missing = [name for name in ("Time", *wanted) if name not in raw.columns]
     if missing:
         raise Skip(f"{path.name}: missing columns {missing}")
@@ -325,6 +330,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
 
 
 def prepare(data_dir: Path, out_dir: Path) -> None:
+    from data_prep.efield import efield_cases
     from data_prep.flame_design import flame_design_cases
     from data_prep.saffire import saffire_cases
     from data_prep.flex import flex_cases  # needs openpyxl; imported late to avoid a cycle
@@ -340,7 +346,8 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
     for case, exports in (*cfig_cases(data_dir, manifest["cases"]),
                           *flex_cases(data_dir, manifest.get("flex_cases", [])),
                           *flame_design_cases(data_dir, more.get("flame_design", [])),
-                          *saffire_cases(data_dir, more.get("saffire", []))):
+                          *saffire_cases(data_dir, more.get("saffire", [])),
+                          *efield_cases(data_dir, more.get("efield", []))):
         for meta, frame in exports:
             assert frame.columns == [column["key"] for column in meta["columns"]]
             frame.write_parquet(parquet_dir / meta["file"])

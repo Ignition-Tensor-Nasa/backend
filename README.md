@@ -508,3 +508,21 @@ to the `saffire-iii` project, from the files listed in `manifest_projects.json`:
   0.3 A (a threshold rule, stated in each event's `source`). This is the project's
   `ignition_label` for aligned overlays.
 - The page generator `polars_analysis/saffire3.py` remains a separate standalone view.
+
+## Source family: ACME E-FIELD Flames (PSI-22)
+
+`data_prep/efield.py` adds 57 runs (`investigation = "ACME E-FIELD Flames"`, case IDs `EF-<test>`,
+up to 3 per test day with the field on; `python3 -m data_prep.efield select`).
+
+- Fuel and burner per test day come from Table 1 of NASA's "E-FIELD Flames data interpretation
+  document"; fuel concentration and the commanded voltage sweep from each run's
+  `*_VoltageSweep.txt`. `o2_pct` is 21 (the document states the coflow was 21% oxygen in all
+  tests); `pressure_kpa` is the median recorded chamber pressure.
+- The mesh voltage is converted to kV with NASA's empirical equation (V = signal × 2486.18 + 141.97).
+  Polarity is taken from the measured sign, not from the log.
+- Datasets: `-sensors` (125 Hz) and `-field-response`, a derived table binning the ion-current
+  signal by mesh voltage (0.5 kV) over the flame period; its x axis is the field, not time.
+  The overlay endpoint therefore returns an x axis with unit `kV` for `kind: "field-response"`.
+- The test numbering is documented there too: year (2 digits), day of year (3 digits), a letter
+  and a digit; tests that differ only in the last digit are variants or repeats, the letters I, O
+  (and later E) are not used, and the day part is not advanced past midnight.

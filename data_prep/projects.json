@@ -49,6 +49,18 @@
     "Saffire-III"
    ],
    "ignition_label": "Igniter on"
+  },
+  {
+   "project_id": "e-field-flames",
+   "title": "E-FIELD Flames: steering flames with electricity",
+   "order": 5,
+   "mission": "ACME on the ISS (Prof. D. Dunn-Rankin, UC Irvine)",
+   "summary": "Methane and ethylene diffusion flames in microgravity with up to ±10 kV applied between a mesh and the burner. The flame's ion current and shape respond to the field strength and polarity.",
+   "measures": "Mesh voltage, ion current, flame light (PMTs), thermocouples, gas flows and pressure at 125 Hz.",
+   "source": "NASA PSI-22",
+   "investigations": [
+    "ACME E-FIELD Flames"
+   ]
   }
  ]
 }
