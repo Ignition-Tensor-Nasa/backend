@@ -25,13 +25,13 @@ ROWS = [
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     path = tmp_path / "catalogue.parquet"
+    monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path)
     pl.DataFrame(
         [(cid, f"Fixture {cid}", inv, fuel, o2, kpa, "not returned")
          for cid, inv, fuel, o2, kpa in ROWS],
         schema=["case_id", "title", "investigation", "fuel", "o2_pct", "pressure_kpa", "note"],
         orient="row",
     ).write_parquet(path)
-    monkeypatch.setattr(catalogue, "CATALOGUE_PATH", path)
     catalogue.load_catalogue.cache_clear()
     yield TestClient(app)
     catalogue.load_catalogue.cache_clear()
@@ -105,7 +105,7 @@ def test_unknown_category_detail_is_a_string(client):
 
 
 def test_missing_catalogue_is_503(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(catalogue, "CATALOGUE_PATH", tmp_path / "absent.parquet")
+    monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path / "absent")
     catalogue.load_catalogue.cache_clear()
     response = client.post(URL, json={})
     assert response.status_code == 503

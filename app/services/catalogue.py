@@ -9,9 +9,10 @@ import polars as pl
 import polars.selectors as cs
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-CATALOGUE_PATH = Path(
-    os.environ.get("PSI_CATALOGUE_PATH")
-    or Path(__file__).resolve().parents[2] / "data" / "catalogue.parquet"
+# Output folder of `python3 -m data_prep.prepare` (B01).
+CURATED_DIR = Path(
+    os.environ.get("PSI_CURATED_DIR")
+    or Path(__file__).resolve().parents[2] / "data" / "curated"
 )
 CATEGORY_KEYS = ("investigation", "fuel")
 RANGE_KEYS = ("o2_pct", "pressure_kpa")
@@ -59,11 +60,13 @@ class Filters(BaseModel):
 
 @lru_cache(maxsize=1)
 def load_catalogue() -> pl.DataFrame:
-    if not CATALOGUE_PATH.is_file():
+    path = CURATED_DIR / "catalogue.parquet"
+    if not path.is_file():
         raise CatalogueUnavailable(
-            f"Case catalogue {CATALOGUE_PATH.name} is missing; run the B01 data preparation."
+            "Curated case catalogue is missing; run the B01 data preparation "
+            "(python3 -m data_prep.prepare)."
         )
-    df = pl.read_parquet(CATALOGUE_PATH)
+    df = pl.read_parquet(path)
     if missing := set(SUMMARY_COLUMNS) - set(df.columns):
         raise CatalogueUnavailable(f"Case catalogue lacks columns: {sorted(missing)}")
     # NaN would pass ">= min" in Polars and break JSON; unknown stays null.

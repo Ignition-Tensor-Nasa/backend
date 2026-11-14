@@ -63,6 +63,40 @@ curl http://127.0.0.1:8000/
 The response is `{"message":"Hello, world!"}`. Interactive API documentation is
 available at <http://127.0.0.1:8000/docs>.
 
+## Prepare the demo data (B01)
+
+The API serves a small curated slice of NASA PSI data. Build it once (and again
+after editing the manifest); raw files are only read:
+
+```sh
+python3 -m data_prep.prepare --data-dir ../data_nasa
+```
+
+`--data-dir` is the folder containing `ACME-CFI-G_PSI-159/`. The script reads
+the hand-reviewed test list in `data_prep/manifest.json` and writes
+`data/curated/` (git-ignored, replaced on every run):
+
+- `catalogue.parquet`: one row per case (verified run) with filter values,
+  source reference and note.
+- `datasets.json`: descriptors (columns, units, default axes) of each CSV.
+- `csv/<dataset_id>.csv`: browser-ready series, full rate, no preamble.
+
+What is and is not verified:
+
+- A case is linked to its recording by the `Test Point:` field inside the raw
+  file's preamble, checked against the ID in the experimental summary table.
+  Tests with a missing, ambiguous or corrupted (NUL bytes) recording are skipped.
+- Only ACME CFI-G normal flames are curated, so `o2_pct` always means the
+  chamber O₂ mole fraction before the test. `pressure_kpa` is the table's
+  approximate pressure, bar × 100.
+- `time_s` is seconds since the first sensor sample (both datasets of a case
+  share that zero). Samples keep the source order; source timestamps can
+  jitter by a few milliseconds (one known 2 ms backward step in 21174F1). Sensor channels keep their raw recorded values with a null
+  unit: the source files do not state units. Setpoints are volts, as named in
+  the source header.
+- `fuel` is the base hydrocarbon; the table's label (e.g. "30% butane") stays
+  in the title and the fuel mole fraction in the note.
+
 ## Case search (B03)
 
 `POST /api/v1/cases/search` filters the curated case catalogue and returns
@@ -74,10 +108,8 @@ curl -X POST http://127.0.0.1:8000/api/v1/cases/search \
   -d '{"filters": {"fuel": ["methane"], "o2_pct": {"min": 21}}}'
 ```
 
-The catalogue is read once from `data/catalogue.parquet` (override with
-`PSI_CATALOGUE_PATH`) and must have the columns `case_id`, `title`,
-`investigation`, `fuel`, `o2_pct`, `pressure_kpa`. It is produced by the B01
-data preparation; until it exists the endpoint answers 503. Invalid keys,
-categories or ranges answer 422.
+The catalogue is read once from `data/curated/catalogue.parquet` (folder
+overridable with `PSI_CURATED_DIR`). Until it exists the endpoint answers 503.
+Invalid keys, categories or ranges answer 422.
 
 Tests (need `pytest` and `httpx`): `python3 -m pytest tests -q`
