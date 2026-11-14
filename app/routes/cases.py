@@ -61,6 +61,13 @@ class ResearchContext(BaseModel):
     disclaimer: str
 
 
+class Explanation(BaseModel):
+    text: str
+    # template: fixed sentence pattern over source fields; curated: written by hand;
+    # generated: constrained AI text (not used so far).
+    origin: Literal["template", "curated", "generated"]
+
+
 class CaseDetail(CaseSummary):
     source_label: str
     source_url: str | None
@@ -68,6 +75,7 @@ class CaseDetail(CaseSummary):
     datasets: list[Dataset]
     events: list[Event]
     research_context: ResearchContext
+    explanation: Explanation | None
 
 
 class SearchResponse(BaseModel):

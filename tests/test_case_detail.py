@@ -47,6 +47,12 @@ def test_research_context_links_to_evidence_or_is_unknown(client):
     assert unknown["tags"] == ["unknown"] and unknown["evidence"] == []
 
 
+def test_explanation_shows_its_origin_or_is_absent(client):
+    assert client.get("/api/v1/cases/T-001").json()["explanation"] == {
+        "text": "Fixture explanation.", "origin": "curated"}
+    assert client.get("/api/v1/cases/T-002").json()["explanation"] is None
+
+
 def test_case_without_datasets_and_with_null_metadata(client):
     body = client.get("/api/v1/cases/T-005").json()
     assert body["datasets"] == [] and body["fuel"] is None and body["o2_pct"] is None

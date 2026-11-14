@@ -143,8 +143,12 @@ def case_detail(case_id: str) -> dict | None:
     if not rows:
         return None
     datasets = [item for item in load_datasets().values() if item["case_id"] == case_id]
-    return {**rows[0], "datasets": datasets, "events": load_events().get(case_id, []),
-            "research_context": research_context(rows[0]["investigation"])}
+    row = rows[0]
+    text = row.get("explanation")
+    explanation = {"text": text, "origin": row.get("explanation_origin")} if text else None
+    return {**row, "datasets": datasets, "events": load_events().get(case_id, []),
+            "research_context": research_context(row["investigation"]),
+            "explanation": explanation}
 
 
 def dataset_csv_path(dataset_id: str) -> Path | None:

@@ -45,9 +45,10 @@ def clear_caches():
 def client(tmp_path, monkeypatch):
     pl.DataFrame(
         [(cid, f"Fixture {cid}", inv, fuel, o2, kpa, Z_ST.get(cid), "Fixture source", None,
-          "Fixture note") for cid, inv, fuel, o2, kpa in ROWS],
+          "Fixture note", "Fixture explanation." if cid == "T-001" else None,
+          "curated" if cid == "T-001" else None) for cid, inv, fuel, o2, kpa in ROWS],
         schema=["case_id", "title", "investigation", "fuel", "o2_pct", "pressure_kpa", "z_st",
-                "source_label", "source_url", "note"],
+                "source_label", "source_url", "note", "explanation", "explanation_origin"],
         orient="row",
     ).write_parquet(tmp_path / "catalogue.parquet")
     (tmp_path / "csv").mkdir()

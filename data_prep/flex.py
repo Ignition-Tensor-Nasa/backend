@@ -11,7 +11,7 @@ import re
 from openpyxl import load_workbook
 import polars as pl
 
-from data_prep.prepare import Skip, descriptor
+from data_prep.prepare import EXPLANATION_ORIGIN, Skip, descriptor
 
 FAMILY = "CFI_PSI-39"
 SHEET = "CFI_DataSummary_Spreadsheet_Jan2021.xlsx"
@@ -172,4 +172,13 @@ def flex_cases(data_dir: Path, entries: list[dict]):
                             f"{test_id}_Summary.pdf; {test_id}_*Data.txt",
             "source_url": None,
             "note": " ".join(part for part in note if part),
+            # B15: built only from the Master Sheet row and the reviewed summary-PDF values.
+            "explanation": (
+                f"A single {fuel or fuel_label} droplet (D0 = {pdf['d0_mm']} mm in the source "
+                f"summary) burned on the ISS at a nominal {str(row['Pressure']).strip()}"
+                + ("" if o2_pct is None else f" with {o2_pct:.0f}% oxygen")
+                + (f" and {helium * 100:.0f}% helium" if helium else "")
+                + f". The source summary gives an average burning-rate constant of "
+                  f"{pdf['kavg_mm2_s']} mm²/s."),
+            "explanation_origin": EXPLANATION_ORIGIN,
         }, exports

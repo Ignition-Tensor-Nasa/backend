@@ -51,3 +51,16 @@ def test_nearest_neighbours_scale_within_investigation_and_skip_missing_values()
     assert result["d"] == []  # unknown oxygen: no neighbours, and nobody's neighbour
     assert all(item["case_id"] != "d" for items in result.values() for item in items)
     assert [item["case_id"] for item in result["x"]] == ["y"]  # never across investigations
+
+
+def test_explanation_uses_only_table_fields():
+    from data_prep.prepare import explain_cfig
+
+    row = {"Fuel": "30% butane", "Hot ignition": "Yes", "burn time (sec)": "35",
+           "Self-ext or flow term": "SE", "Cool flame?": "yes, PCI-D"}
+    assert explain_cfig(row, 39.537, 202.66) == (
+        "Gas flame test with 30% butane in 39.5% oxygen and about 203 kPa. It ignited, burned for "
+        "35 s and went out by itself. The table marks a cool flame in this run.")
+    assert explain_cfig({"Fuel": "propane", "Hot ignition": "No", "Cool flame?": "no, PCI-hot"},
+                        None, 101.33) == (
+        "Gas flame test with propane in about 101 kPa. The source table records no hot ignition.")

@@ -176,6 +176,32 @@ def build_note(row: dict, highlight: str | None, events: str | None) -> str:
     return " ".join(part for part in sentences if part)
 
 
+EXPLANATION_ORIGIN = "template"  # fixed sentence template over source fields; no AI text
+
+
+def explain_cfig(row: dict, o2_pct: float | None, kpa: float | None) -> str:
+    """B15: one or two plain sentences built only from the experimental table row."""
+    where = " and ".join(part for part in (
+        None if o2_pct is None else f"{o2_pct:.1f}% oxygen",
+        None if kpa is None else f"about {kpa:.0f} kPa") if part)
+    opening = f"Gas flame test with {text(row, 'Fuel')}" + (f" in {where}." if where else ".")
+    ignition = (text(row, "Hot ignition") or "").lower()
+    burn = number(row, "burn time (sec)")
+    ending = {"SE": "went out by itself", "FT": "was ended by stopping the fuel flow"}.get(
+        text(row, "Self-ext or flow term"))
+    if ignition == "yes":
+        outcome = "It ignited" + (f", burned for {burn:g} s" if burn else "") + (
+            f" and {ending}." if ending else ".")
+    elif ignition == "no":
+        outcome = "The source table records no hot ignition."
+    else:
+        outcome = "The source table does not say clearly whether it ignited."
+    cool = text(row, "Cool flame?")
+    if cool and cool.lower().startswith("yes"):
+        outcome += " The table marks a cool flame in this run."
+    return f"{opening} {outcome}"
+
+
 def cfig_cases(data_dir: Path, entries: list[dict]):
     """Yield (case row, [(descriptor, frame), ...]) for ACME CFI-G normal-flame tests."""
     family = data_dir / FAMILY
@@ -236,6 +262,8 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
                             f"{TABLE}; {prefix}data.csv",
             "source_url": None,
             "note": build_note(row, entry.get("highlight"), events_sentence(events)),
+            "explanation": explain_cfig(row, o2_pct, kpa),
+            "explanation_origin": EXPLANATION_ORIGIN,
             # B13: popped by prepare() into events.json.
             "_events": [{"label": name, "time_s": round(offset, 3),
                          "dataset_id": f"{case_id}-sensors", "source": prefix + "TP.txt"}

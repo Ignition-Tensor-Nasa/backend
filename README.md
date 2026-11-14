@@ -279,3 +279,12 @@ calibrated similarity or a safety score, and no UMAP embedding is produced.
 
 The tags only group research context. They do not certify the fire-safety
 performance of anything.
+
+## Short case explanation (B15)
+
+`CaseDetail.explanation` is `{"text": string, "origin": "template" | "curated" |
+"generated"}` or `null`. All current explanations have origin `template`: one
+or two plain sentences filled from the source table row (or, for FLEX, the
+Master Sheet row and the reviewed summary-PDF values) by a fixed pattern in
+the preparation script. No AI text is generated, and the explanation states
+nothing the case's source fields do not. It is not a science chatbot.
