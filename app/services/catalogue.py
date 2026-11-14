@@ -178,6 +178,19 @@ def dataset_frame(dataset_id: str) -> tuple[dict, pl.DataFrame] | None:
     return dataset, frame
 
 
+@lru_cache(maxsize=32)
+def dataset_data_json(dataset_id: str) -> str | None:
+    """Serialized DatasetData for charts (cached: the curated data is frozen); None if unknown."""
+    found = dataset_frame(dataset_id)
+    if found is None:
+        return None
+    dataset, frame = found
+    described = {key: dataset[key] for key in ("dataset_id", "label", "columns", "default_x", "default_y")}
+    # One value per descriptor column, same order; allow_nan=False guards the finite-or-null rule.
+    return json.dumps({"dataset": described, "rows": frame.rows(), "note": dataset.get("note")},
+                      ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+
+
 def dataset_csv(dataset_id: str) -> str | None:
     """CSV export generated from the prepared Parquet; None for unknown IDs."""
     found = dataset_frame(dataset_id)

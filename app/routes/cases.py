@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from app.services.catalogue import (
-    Filters, case_detail, case_neighbors, dataset_csv, search_cases)
+    Filters, case_detail, case_neighbors, dataset_csv, dataset_data_json, search_cases)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -116,6 +116,22 @@ def neighbors(case_id: str) -> Neighbors:
     if result is None:
         raise HTTPException(404, f"Unknown case: {case_id}")
     return Neighbors(**result)
+
+
+class DatasetData(BaseModel):
+    dataset: Dataset
+    rows: list[list[float | str | None]]  # one value per dataset.columns entry, same order
+    note: str | None
+
+
+@router.get("/datasets/{dataset_id}/data", response_model=DatasetData)
+def dataset_data(dataset_id: str) -> Response:
+    """Structured measurements for charts, read from prepared Parquet."""
+    content = dataset_data_json(dataset_id)
+    if content is None:
+        raise HTTPException(404, f"Unknown dataset: {dataset_id}")
+    # Already serialized and checked; skipping per-row model validation keeps large series fast.
+    return Response(content, media_type="application/json")
 
 
 @router.get("/datasets/{dataset_id}/csv")

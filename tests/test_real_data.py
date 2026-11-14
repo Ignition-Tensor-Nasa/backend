@@ -24,6 +24,14 @@ def test_every_case_opens_its_measurements():
         for dataset in detail["datasets"]:
             keys = [column["key"] for column in dataset["columns"]]
             assert dataset["default_x"] in keys and set(dataset["default_y"]) <= set(keys)
+            data = client.get(f"/api/v1/datasets/{dataset['dataset_id']}/data").json()
+            assert data["dataset"] == dataset and data["note"]
+            assert data["rows"] and all(len(row) == len(keys) for row in data["rows"])
+            assert all(value is None or isinstance(value, (int, float))
+                       for row in data["rows"][:50] for value in row)
+            x = keys.index(dataset["default_x"])
+            times = [row[x] for row in data["rows"]]
+            assert times == sorted(times)
             response = client.get(f"/api/v1/datasets/{dataset['dataset_id']}/csv")
             assert response.status_code == 200
             lines = response.text.splitlines()

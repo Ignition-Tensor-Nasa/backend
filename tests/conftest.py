@@ -40,6 +40,7 @@ def clear_caches():
     catalogue.load_events.cache_clear()
     catalogue.load_neighbors.cache_clear()
     catalogue.load_context.cache_clear()
+    catalogue.dataset_data_json.cache_clear()
 
 
 @pytest.fixture

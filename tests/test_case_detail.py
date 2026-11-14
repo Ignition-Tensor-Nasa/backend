@@ -64,6 +64,25 @@ def test_unknown_case_is_404(client):
     assert response.status_code == 404 and "T-999" in response.json()["detail"]
 
 
+def test_dataset_data_follows_the_descriptor(client):
+    response = client.get("/api/v1/datasets/T-001-a/data")
+    assert response.status_code == 200 and response.headers["content-type"] == "application/json"
+    body = response.json()
+    assert body["dataset"] == client.get("/api/v1/cases/T-001").json()["datasets"][0]
+    # Ordered by time; a missing sample and a NaN are null, never zero; numbers, not strings;
+    # the Parquet column that the descriptor does not list is not sent.
+    assert body["rows"] == [[0.0, 1.5], [0.5, None], [1.0, None], [2.0, 3.0]]
+    assert body["note"] == "Fixture note about sampling."
+
+
+def test_dataset_data_errors(client):
+    for dataset_id in ("nope", "T-001-a.parquet", "..%2Fsecret", "..%2F..%2Fcatalogue.parquet"):
+        assert client.get(f"/api/v1/datasets/{dataset_id}/data").status_code == 404, dataset_id
+    for dataset_id in ("T-001-gone", "T-002-escape"):
+        response = client.get(f"/api/v1/datasets/{dataset_id}/data")
+        assert response.status_code == 503 and "42" not in response.text
+
+
 def test_csv_export_is_generated_from_prepared_parquet(client):
     response = client.get("/api/v1/datasets/T-001-a/csv", headers={"Origin": "http://localhost:5173"})
     assert response.status_code == 200 and response.text == CSV
