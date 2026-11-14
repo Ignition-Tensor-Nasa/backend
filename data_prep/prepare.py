@@ -2,8 +2,8 @@
 
 Run from backend/:  python3 -m data_prep.prepare --data-dir ../data_nasa
 
-Reads only the ACME CFI-G tests listed in data_prep/manifest.json and never
-modifies raw data. Output (data/curated/) is replaced on every run.
+Reads only the ACME CFI-G and CFI (FLEX) tests listed in data_prep/manifest.json
+and never modifies raw data. Output (data/curated/) is replaced on every run.
 """
 
 import argparse
@@ -96,13 +96,14 @@ def read_series(path: Path, test_id: str, wanted: dict,
     return frame, start
 
 
-def descriptor(dataset_id, case_id, label, columns, unit, default_y):
+def descriptor(dataset_id, case_id, label, columns, default_y, time_label="Elapsed time"):
+    """Dataset descriptor; `columns` maps key -> (label, unit) and time_s comes first."""
     return {
         "dataset_id": dataset_id, "case_id": case_id, "label": label,
         "file": f"{dataset_id}.csv",
-        "columns": [{"key": "time_s", "label": "Elapsed time", "data_type": "number", "unit": "s"}]
+        "columns": [{"key": "time_s", "label": time_label, "data_type": "number", "unit": "s"}]
         + [{"key": key, "label": text, "data_type": "number", "unit": unit}
-           for key, text in columns.items()],
+           for key, (text, unit) in columns.items()],
         "default_x": "time_s", "default_y": default_y,
     }
 
@@ -162,7 +163,8 @@ def build_note(row: dict, highlight: str | None, events: str | None) -> str:
     return " ".join(part for part in sentences if part)
 
 
-def prepare(data_dir: Path, out_dir: Path) -> None:
+def cfig_cases(data_dir: Path, entries: list[dict]):
+    """Yield (case row, [(descriptor, frame), ...]) for ACME CFI-G normal-flame tests."""
     family = data_dir / FAMILY
     table_path = family / "csv" / TABLE
     if not table_path.is_file():
@@ -171,13 +173,7 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
     rows: dict[str, list[dict]] = {}
     for row in table.rename({name: name.strip() for name in table.columns}).to_dicts():
         rows.setdefault(re.sub(r"\s+", "", row.get("Test") or ""), []).append(row)
-    manifest = json.loads((Path(__file__).parent / "manifest.json").read_text("utf-8"))
-
-    csv_dir = out_dir / "csv"
-    shutil.rmtree(csv_dir, ignore_errors=True)
-    csv_dir.mkdir(parents=True)
-    cases, datasets = [], []
-    for entry in manifest["cases"]:
+    for entry in entries:
         test_id = entry["test_id"]
         case_id = f"CFIG-{test_id}"
         try:
@@ -190,23 +186,21 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
                 raise Skip("not exactly one *_data.csv recording")
             data, start = read_series(family / "csv" / (prefix + "data.csv"), test_id, CHANNELS)
             exports = [(descriptor(
-                f"{case_id}-sensors", case_id, "Sensor recording (raw channels)", CHANNELS,
-                None, ["Radiometer3+30LoGain", "PMT1", "MFCA3FuelFlow"]), data)]
+                f"{case_id}-sensors", case_id, "Sensor recording (raw channels)",
+                {key: (label, None) for key, label in CHANNELS.items()},
+                ["Radiometer3+30LoGain", "PMT1", "MFCA3FuelFlow"]), data)]
             try:
                 setpoints, _ = read_series(
                     family / "csv" / (prefix + "mfcSetpoints.csv"), test_id, SETPOINTS, start)
                 exports.append((descriptor(
                     f"{case_id}-mfc-setpoints", case_id, "MFC setpoints (commanded)",
-                    SETPOINTS, "V", list(SETPOINTS)), setpoints))
+                    {key: (label, "V") for key, label in SETPOINTS.items()},
+                    list(SETPOINTS)), setpoints))
             except Skip as reason:
                 print(f"  {case_id}: no setpoint dataset ({reason})")
         except Skip as reason:
             print(f"SKIPPED {case_id}: {reason}")
             continue
-        for meta, frame in exports:
-            frame.write_csv(csv_dir / meta["file"])
-            assert frame.columns == [column["key"] for column in meta["columns"]]
-            datasets.append(meta)
         fuel_label = text(row, "Fuel")
         o2 = number(row, "XO2 before test")
         bar = number(row, "approx p (bar)")
@@ -215,7 +209,7 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         conditions = ", ".join(part for part in (
             fuel_label, None if o2_pct is None else f"{o2_pct:.1f}% O₂",
             None if kpa is None else f"{kpa:.0f} kPa") if part)
-        cases.append({
+        yield {
             "case_id": case_id,
             "title": f"CFI-G {test_id}: {conditions}",
             "investigation": INVESTIGATION,
@@ -228,7 +222,24 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
             "source_url": None,
             "note": build_note(row, entry.get("highlight"), tp_events(
                 family / "txt" / (prefix + "TP.txt"), start)),
-        })
+        }, exports
+
+
+def prepare(data_dir: Path, out_dir: Path) -> None:
+    from data_prep.flex import flex_cases  # needs openpyxl; imported late to avoid a cycle
+
+    manifest = json.loads((Path(__file__).parent / "manifest.json").read_text("utf-8"))
+    csv_dir = out_dir / "csv"
+    shutil.rmtree(csv_dir, ignore_errors=True)
+    csv_dir.mkdir(parents=True)
+    cases, datasets = [], []
+    for case, exports in (*cfig_cases(data_dir, manifest["cases"]),
+                          *flex_cases(data_dir, manifest.get("flex_cases", []))):
+        for meta, frame in exports:
+            assert frame.columns == [column["key"] for column in meta["columns"]]
+            frame.write_csv(csv_dir / meta["file"])
+            datasets.append(meta)
+        cases.append(case)
     if not cases:
         raise SystemExit("No case could be prepared.")
     schema = {key: pl.String for key in cases[0]} | {
@@ -244,7 +255,7 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data-dir", type=Path, default=BACKEND.parent / "data_nasa",
-                        help="folder holding ACME-CFI-G_PSI-159/")
+                        help="folder holding ACME-CFI-G_PSI-159/ and CFI_PSI-39/")
     parser.add_argument("--out-dir", type=Path, default=BACKEND / "data" / "curated")
     args = parser.parse_args()
     prepare(args.data_dir.resolve(), args.out_dir.resolve())

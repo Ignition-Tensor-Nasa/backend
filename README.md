@@ -69,7 +69,9 @@ after editing the manifest); raw files are only read:
 python3 -m data_prep.prepare --data-dir ../data_nasa
 ```
 
-`--data-dir` is the folder containing `ACME-CFI-G_PSI-159/`. The script reads
+`--data-dir` is the folder containing `ACME-CFI-G_PSI-159/` and `CFI_PSI-39/`
+(the FLEX adapter also needs `openpyxl`, see `polars_analysis/requirements.txt`).
+The script reads
 the hand-reviewed test list in `data_prep/manifest.json` and writes
 `data/curated/` (git-ignored, replaced on every run):
 
@@ -94,15 +96,32 @@ What is and is not verified:
 - `fuel` is the base hydrocarbon; the table's label (e.g. "30% butane") stays
   in the title and the fuel mole fraction in the note.
 
+### Second source family: CFI droplet tests (B07)
+
+`data_prep/flex.py` adds 14 CFI (FLEX) droplet tests through the same
+case/dataset interface (`investigation = "CFI (FLEX)"`, case IDs `FLEX-nnnn`),
+each with three datasets: droplet diameter, cool-flame diameter and radiometer
+power, in the units named by the source columns.
+
+- Link: the FLEX number in the file name, the Master Sheet row and the
+  per-test summary PDF; the CIR run ID must match between sheet and PDF.
+- `o2_pct` comes from the Master Sheet and is used only when the summary PDF
+  agrees; FLEX-1213 disagrees (0.17 vs 0.210) and stays `null`.
+- `pressure_kpa` is the sheet's nominal pressure, atm × 101.325. The PDF's
+  measured pressure is quoted in the note.
+- Each dataset keeps its own source time column (not a shared zero).
+- Other families are not adapted; each would be a separate task.
+
 ## Filter options (B02)
 
 `GET /api/v1/filters` returns the categories and known numeric bounds present
 in the curated catalogue (`null` bounds when no case has that value):
 
 ```json
-{"investigation": ["ACME CFI-G"], "fuel": ["butane", "ethane", "propane"],
- "o2_pct": {"min": 17.969, "max": 39.655},
- "pressure_kpa": {"min": 50.665, "max": 303.99}}
+{"investigation": ["ACME CFI-G", "CFI (FLEX)"],
+ "fuel": ["butane", "dodecane", "ethane", "propane"],
+ "o2_pct": {"min": 17.0, "max": 39.655},
+ "pressure_kpa": {"min": 50.663, "max": 506.625}}
 ```
 
 ## Case search (B03)
@@ -187,5 +206,5 @@ Cases worth showing:
 - `CFIG-21162F1` vs `CFIG-21162C1`: no ignition at 20.7% O₂ against a burn at 21.0%.
 
 Other rehearsed prompts: "Pokaż testy w atmosferze zbliżonej do ziemskiej:
-20-22% tlenu, 95-105 kPa" (4 runs) and "Pokaż testy przy niskim ciśnieniu,
-45-55 kPa" (7 runs); English versions are in `DEMO_PROMPTS`.
+20-22% tlenu, 95-105 kPa" (10 runs: 4 CFI-G, 6 FLEX) and "Pokaż testy przy
+niskim ciśnieniu, 45-55 kPa" (9 runs); English versions are in `DEMO_PROMPTS`.
