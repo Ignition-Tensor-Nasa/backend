@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from app.services.catalogue import Filters, search_cases
+from app.services.catalogue import Filters, case_detail, search_cases
 
 router = APIRouter(prefix="/api/v1")
 
@@ -21,6 +21,28 @@ class CaseSummary(BaseModel):
     pressure_kpa: float | None
 
 
+class Column(BaseModel):
+    key: str
+    label: str
+    data_type: str
+    unit: str | None
+
+
+class Dataset(BaseModel):
+    dataset_id: str
+    label: str
+    columns: list[Column]
+    default_x: str | None
+    default_y: list[str]
+
+
+class CaseDetail(CaseSummary):
+    source_label: str
+    source_url: str | None
+    note: str | None
+    datasets: list[Dataset]
+
+
 class SearchResponse(BaseModel):
     items: list[CaseSummary]
     total: int
@@ -33,3 +55,12 @@ def search(request: SearchRequest = SearchRequest()) -> SearchResponse:
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     return SearchResponse(items=items, total=len(items))
+
+
+@router.get("/cases/{case_id}")
+def detail(case_id: str) -> CaseDetail:
+    case = case_detail(case_id)
+    if case is None:
+        raise HTTPException(404, f"Unknown case: {case_id}")
+    return CaseDetail(**case)
+

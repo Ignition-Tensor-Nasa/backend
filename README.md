@@ -124,3 +124,14 @@ overridable with `PSI_CURATED_DIR`). Until it exists the endpoint answers 503.
 Invalid keys, categories or ranges answer 422.
 
 Tests (need `pytest` and `httpx`): `python3 -m pytest tests -q`
+
+## Case detail (B04)
+
+`GET /api/v1/cases/{case_id}` returns the case summary plus `source_label`,
+`source_url` (null: no verified link), a curated `note` and the descriptors of
+its datasets: `dataset_id`, `label`, `columns` (`key`, `label`, `data_type`,
+`unit`), `default_x`, `default_y`. Unknown cases answer 404.
+
+```sh
+curl http://127.0.0.1:8000/api/v1/cases/CFIG-21291C1
+```

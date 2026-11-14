@@ -1,6 +1,7 @@
 """Curated case catalogue (produced by B01) and exact filter search."""
 
 from functools import lru_cache
+import json
 import os
 from pathlib import Path
 from typing import Annotated
@@ -71,6 +72,26 @@ def load_catalogue() -> pl.DataFrame:
         raise CatalogueUnavailable(f"Case catalogue lacks columns: {sorted(missing)}")
     # NaN would pass ">= min" in Polars and break JSON; unknown stays null.
     return df.with_columns(cs.float().fill_nan(None))
+
+
+@lru_cache(maxsize=1)
+def load_datasets() -> dict[str, dict]:
+    """Dataset descriptors by ID: the allowlist of servable CSV files."""
+    path = CURATED_DIR / "datasets.json"
+    if not path.is_file():
+        raise CatalogueUnavailable(
+            "Curated dataset descriptors are missing; run the B01 data preparation "
+            "(python3 -m data_prep.prepare)."
+        )
+    return {item["dataset_id"]: item for item in json.loads(path.read_text("utf-8"))["datasets"]}
+
+
+def case_detail(case_id: str) -> dict | None:
+    rows = load_catalogue().filter(pl.col("case_id") == case_id).to_dicts()
+    if not rows:
+        return None
+    datasets = [item for item in load_datasets().values() if item["case_id"] == case_id]
+    return {**rows[0], "datasets": datasets}
 
 
 def filter_options() -> dict:

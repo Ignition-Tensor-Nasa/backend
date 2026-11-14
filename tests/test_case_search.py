@@ -1,40 +1,12 @@
-"""Run from backend/: python -m pytest tests -q (needs pytest and httpx).
+"""Run from backend/: python3 -m pytest tests -q (needs pytest and httpx)."""
 
-Rows below are synthetic test fixtures, not NASA measurements.
-"""
-
-from fastapi.testclient import TestClient
 import polars as pl
 import pytest
 
-from app.main import app
 from app.services import catalogue
+from tests.conftest import clear_caches
 
 URL = "/api/v1/cases/search"
-ROWS = [
-    # case_id, investigation, fuel, o2_pct, pressure_kpa
-    ("T-003", "INV-A", "ethylene", 30.0, 101.3),
-    ("T-001", "INV-A", "methane", 21.0, 101.3),
-    ("T-002", "INV-A", "methane", 40.0, 50.0),
-    ("T-004", "INV-B", "methane", 21.0, None),
-    ("T-005", "INV-B", None, None, 101.3),
-    ("T-006", "INV-B", "ethylene", float("nan"), 200.0),
-]
-
-
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    path = tmp_path / "catalogue.parquet"
-    monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path)
-    pl.DataFrame(
-        [(cid, f"Fixture {cid}", inv, fuel, o2, kpa, "not returned")
-         for cid, inv, fuel, o2, kpa in ROWS],
-        schema=["case_id", "title", "investigation", "fuel", "o2_pct", "pressure_kpa", "note"],
-        orient="row",
-    ).write_parquet(path)
-    catalogue.load_catalogue.cache_clear()
-    yield TestClient(app)
-    catalogue.load_catalogue.cache_clear()
 
 
 def ids(client, filters):
@@ -117,13 +89,13 @@ def test_filter_bounds_are_null_when_nothing_is_known(client, tmp_path):
     pl.read_parquet(tmp_path / "catalogue.parquet").with_columns(
         pl.lit(None, dtype=pl.Float64).alias("o2_pct")
     ).write_parquet(tmp_path / "catalogue.parquet")
-    catalogue.load_catalogue.cache_clear()
+    clear_caches()
     assert client.get("/api/v1/filters").json()["o2_pct"] is None
 
 
 def test_missing_catalogue_is_503(client, tmp_path, monkeypatch):
     monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path / "absent")
-    catalogue.load_catalogue.cache_clear()
+    clear_caches()
     response = client.post(URL, json={})
     assert response.status_code == 503
     assert "B01" in response.json()["detail"]
