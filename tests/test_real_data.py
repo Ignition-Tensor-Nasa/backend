@@ -24,3 +24,8 @@ def test_every_case_opens_its_measurements():
         for dataset in detail["datasets"]:
             keys = [column["key"] for column in dataset["columns"]]
             assert dataset["default_x"] in keys and set(dataset["default_y"]) <= set(keys)
+            response = client.get(f"/api/v1/datasets/{dataset['dataset_id']}/csv")
+            assert response.status_code == 200
+            lines = response.text.splitlines()
+            assert lines[0].split(",") == keys
+            assert len(lines) > 1 and all(float(value) == float(value) for value in lines[1].split(","))

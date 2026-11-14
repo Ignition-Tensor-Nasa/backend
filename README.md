@@ -135,3 +135,14 @@ its datasets: `dataset_id`, `label`, `columns` (`key`, `label`, `data_type`,
 ```sh
 curl http://127.0.0.1:8000/api/v1/cases/CFIG-21291C1
 ```
+
+## Dataset CSV (B05)
+
+`GET /api/v1/datasets/{dataset_id}/csv` returns one prepared CSV (UTF-8, comma,
+header row equal to the descriptor's column keys, empty cell = missing) as a
+`text/csv` attachment. Only dataset IDs listed in `datasets.json` are served;
+the request never supplies a path. Unknown IDs answer 404.
+
+```sh
+curl -OJ http://127.0.0.1:8000/api/v1/datasets/CFIG-21291C1-sensors/csv
+```

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
-from app.services.catalogue import Filters, case_detail, search_cases
+from app.services.catalogue import Filters, case_detail, dataset_csv_path, search_cases
 
 router = APIRouter(prefix="/api/v1")
 
@@ -64,3 +65,10 @@ def detail(case_id: str) -> CaseDetail:
         raise HTTPException(404, f"Unknown case: {case_id}")
     return CaseDetail(**case)
 
+
+@router.get("/datasets/{dataset_id}/csv")
+def dataset_csv(dataset_id: str) -> FileResponse:
+    path = dataset_csv_path(dataset_id)
+    if path is None:
+        raise HTTPException(404, f"Unknown dataset: {dataset_id}")
+    return FileResponse(path, media_type="text/csv; charset=utf-8", filename=path.name)

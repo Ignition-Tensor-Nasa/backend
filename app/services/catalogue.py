@@ -94,6 +94,19 @@ def case_detail(case_id: str) -> dict | None:
     return {**rows[0], "datasets": datasets}
 
 
+def dataset_csv_path(dataset_id: str) -> Path | None:
+    """File of an allowlisted dataset; None for unknown IDs."""
+    dataset = load_datasets().get(dataset_id)
+    if dataset is None:
+        return None
+    folder = (CURATED_DIR / "csv").resolve()
+    path = (folder / dataset["file"]).resolve()
+    # The name comes from datasets.json, never the request; still refuse to leave the folder.
+    if path.parent != folder or not path.is_file():
+        raise CatalogueUnavailable(f"CSV of dataset {dataset_id} is missing; rerun the B01 data preparation.")
+    return path
+
+
 def filter_options() -> dict:
     """Actual categories and known numeric bounds of the curated catalogue."""
     df = load_catalogue()
