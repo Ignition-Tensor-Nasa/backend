@@ -1,0 +1,235 @@
+"""Curated case catalogue (produced by B01) and exact filter search."""
+
+from functools import lru_cache
+import json
+import os
+from pathlib import Path
+from typing import Annotated
+
+import polars as pl
+import polars.selectors as cs
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Output folder of `python3 -m data_prep.prepare` (B01).
+CURATED_DIR = Path(
+    os.environ.get("PSI_CURATED_DIR")
+    or Path(__file__).resolve().parents[2] / "data" / "curated"
+)
+CATEGORY_KEYS = ("investigation", "fuel")
+RANGE_KEYS = ("o2_pct", "pressure_kpa", "z_st")
+SUMMARY_COLUMNS = ("case_id", "title", *CATEGORY_KEYS, *RANGE_KEYS)
+
+O2Pct = Annotated[float, Field(ge=0, le=100, allow_inf_nan=False)]
+PressureKpa = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+Fraction = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+Categories = Annotated[list[str], Field(min_length=1)]
+
+
+class CatalogueUnavailable(RuntimeError):
+    pass
+
+
+class _Range(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _check_bounds(self):
+        if self.min is None and self.max is None:
+            raise ValueError("range needs min or max")
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError("min must not exceed max")
+        return self
+
+
+class O2Range(_Range):
+    min: O2Pct | None = None
+    max: O2Pct | None = None
+
+
+class PressureRange(_Range):
+    min: PressureKpa | None = None
+    max: PressureKpa | None = None
+
+
+class FractionRange(_Range):
+    min: Fraction | None = None
+    max: Fraction | None = None
+
+
+class Filters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    investigation: Categories | None = None
+    fuel: Categories | None = None
+    o2_pct: O2Range | None = None
+    pressure_kpa: PressureRange | None = None
+    z_st: FractionRange | None = None  # stoichiometric mixture fraction (B10)
+
+
+@lru_cache(maxsize=1)
+def load_catalogue() -> pl.DataFrame:
+    path = CURATED_DIR / "catalogue.parquet"
+    if not path.is_file():
+        raise CatalogueUnavailable(
+            "Curated case catalogue is missing; run the B01 data preparation "
+            "(python3 -m data_prep.prepare)."
+        )
+    df = pl.read_parquet(path)
+    if missing := set(SUMMARY_COLUMNS) - set(df.columns):
+        raise CatalogueUnavailable(f"Case catalogue lacks columns: {sorted(missing)}")
+    # NaN would pass ">= min" in Polars and break JSON; unknown stays null.
+    return df.with_columns(cs.float().fill_nan(None))
+
+
+@lru_cache(maxsize=1)
+def load_datasets() -> dict[str, dict]:
+    """Dataset descriptors by ID: the allowlist of servable CSV files."""
+    path = CURATED_DIR / "datasets.json"
+    if not path.is_file():
+        raise CatalogueUnavailable(
+            "Curated dataset descriptors are missing; run the B01 data preparation "
+            "(python3 -m data_prep.prepare)."
+        )
+    return {item["dataset_id"]: item for item in json.loads(path.read_text("utf-8"))["datasets"]}
+
+
+@lru_cache(maxsize=1)
+def load_events() -> dict[str, list[dict]]:
+    """Optional B13 artifact: source-logged events per case (empty when not prepared)."""
+    path = CURATED_DIR / "events.json"
+    return json.loads(path.read_text("utf-8"))["events"] if path.is_file() else {}
+
+
+@lru_cache(maxsize=1)
+def load_neighbors() -> dict:
+    """Optional B11 artifact: {"metric": str, "neighbors": {case_id: [...]}}."""
+    path = CURATED_DIR / "neighbors.json"
+    if not path.is_file():
+        return {"metric": "No similarity artifact has been prepared.", "neighbors": {}}
+    return json.loads(path.read_text("utf-8"))
+
+
+def case_neighbors(case_id: str) -> dict | None:
+    """Precomputed nearest cases with their summaries; None for an unknown case."""
+    summaries = {row["case_id"]: row for row in load_catalogue().select(SUMMARY_COLUMNS).to_dicts()}
+    if case_id not in summaries:
+        return None
+    artifact = load_neighbors()
+    items = [{"case": summaries[item["case_id"]], "distance": item["distance"]}
+             for item in artifact["neighbors"].get(case_id, []) if item["case_id"] in summaries]
+    return {"metric": artifact["metric"], "items": items}
+
+
+UNKNOWN_CONTEXT = {"tags": ["unknown"], "rationale": "No reviewed research context.", "evidence": []}
+
+
+@lru_cache(maxsize=1)
+def load_context() -> dict:
+    """Optional B14 artifact: reviewed research-context tags per investigation."""
+    path = CURATED_DIR / "context.json"
+    if not path.is_file():
+        return {"disclaimer": "", "investigations": {}}
+    return json.loads(path.read_text("utf-8"))
+
+
+def research_context(investigation: str) -> dict:
+    context = load_context()
+    return {**context["investigations"].get(investigation, UNKNOWN_CONTEXT),
+            "disclaimer": context["disclaimer"]}
+
+
+def case_detail(case_id: str) -> dict | None:
+    rows = load_catalogue().filter(pl.col("case_id") == case_id).to_dicts()
+    if not rows:
+        return None
+    datasets = [item for item in load_datasets().values() if item["case_id"] == case_id]
+    row = rows[0]
+    text = row.get("explanation")
+    explanation = {"text": text, "origin": row.get("explanation_origin")} if text else None
+    return {**row, "datasets": datasets, "events": load_events().get(case_id, []),
+            "research_context": research_context(row["investigation"]),
+            "explanation": explanation}
+
+
+def dataset_frame(dataset_id: str) -> tuple[dict, pl.DataFrame] | None:
+    """(descriptor, prepared measurements) of an allowlisted dataset; None for unknown IDs.
+
+    Columns follow the descriptor, rows are ordered by the default x column, and
+    non-finite numbers become null. Only prepared Parquet is read, never raw sources.
+    """
+    dataset = load_datasets().get(dataset_id)
+    if dataset is None:
+        return None
+    folder = (CURATED_DIR / "parquet").resolve()
+    path = (folder / dataset["file"]).resolve()
+    # The name comes from datasets.json, never the request; still refuse to leave the folder.
+    if path.parent != folder or not path.is_file():
+        raise CatalogueUnavailable(
+            f"Prepared data of dataset {dataset_id} is missing; rerun the B01 data preparation.")
+    keys = [column["key"] for column in dataset["columns"]]
+    frame = pl.read_parquet(path)
+    if missing := set(keys) - set(frame.columns):
+        raise CatalogueUnavailable(f"Dataset {dataset_id} lacks columns: {sorted(missing)}")
+    floats = cs.float()
+    frame = frame.select(keys).with_columns(
+        pl.when(floats.is_finite()).then(floats).name.keep())
+    if dataset["default_x"] in keys:
+        frame = frame.sort(dataset["default_x"], maintain_order=True, nulls_last=True)
+    return dataset, frame
+
+
+@lru_cache(maxsize=32)
+def dataset_data_json(dataset_id: str) -> str | None:
+    """Serialized DatasetData for charts (cached: the curated data is frozen); None if unknown."""
+    found = dataset_frame(dataset_id)
+    if found is None:
+        return None
+    dataset, frame = found
+    described = {key: dataset[key] for key in ("dataset_id", "label", "columns", "default_x", "default_y")}
+    # One value per descriptor column, same order; allow_nan=False guards the finite-or-null rule.
+    return json.dumps({"dataset": described, "rows": frame.rows(), "note": dataset.get("note")},
+                      ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+
+
+def dataset_csv(dataset_id: str) -> str | None:
+    """CSV export generated from the prepared Parquet; None for unknown IDs."""
+    found = dataset_frame(dataset_id)
+    return None if found is None else found[1].write_csv()
+
+
+def filter_options() -> dict:
+    """Actual categories and known numeric bounds of the curated catalogue."""
+    df = load_catalogue()
+    options: dict = {key: sorted(df[key].drop_nulls().unique()) for key in CATEGORY_KEYS}
+    for key in RANGE_KEYS:
+        known = df[key].drop_nulls()
+        options[key] = {"min": known.min(), "max": known.max()} if len(known) else None
+    return options
+
+
+def check_categories(filters: Filters) -> None:
+    """ValueError when a category value does not exist in the catalogue."""
+    df = load_catalogue()
+    for key in CATEGORY_KEYS:
+        if unknown := set(getattr(filters, key) or ()) - set(df[key].drop_nulls()):
+            raise ValueError(f"Unknown {key} value(s): {sorted(unknown)}")
+
+
+def search_cases(filters: Filters) -> list[dict]:
+    """All matching case summaries ordered by case ID. ValueError on unknown categories."""
+    check_categories(filters)
+    df = load_catalogue()
+    for key in CATEGORY_KEYS:
+        wanted = getattr(filters, key)
+        if wanted is not None:
+            df = df.filter(pl.col(key).is_in(wanted))
+    for key in RANGE_KEYS:
+        bounds = getattr(filters, key)
+        if bounds is None:
+            continue
+        # A null comparison is dropped by filter, so null metadata fails the constraint.
+        if bounds.min is not None:
+            df = df.filter(pl.col(key) >= bounds.min)
+        if bounds.max is not None:
+            df = df.filter(pl.col(key) <= bounds.max)
+    return df.sort("case_id").select(SUMMARY_COLUMNS).to_dicts()

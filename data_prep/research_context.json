@@ -1,0 +1,31 @@
+{
+ "_comment": "B14: hand-reviewed research-context tags per investigation. Allowed tags: prevention, detection, suppression, unknown. Every tag other than 'unknown' needs evidence (document, page, verbatim quote) from the files shipped with the dataset. Tags group studies by research context; they do not certify fire-safety performance.",
+ "disclaimer": "Research-context grouping only; it does not certify fire-safety performance of any material, atmosphere or system.",
+ "investigations": {
+  "CFI (FLEX)": {
+   "tags": [
+    "prevention"
+   ],
+   "rationale": "The source presents cool flames as a re-ignition hazard to understand, which is fire-prevention context. No detection or suppression claim is made for these runs.",
+   "evidence": [
+    {
+     "document": "CFI_PSI-39/pdf/Cool Flames in Space, a Hot Prospect on Earth_CFI.pdf",
+     "page": 23,
+     "quote": "These cool flames produce partially oxidized fuel and potentially re-ignite to hot flames posing fire safety concerns in spacecraft environments"
+    },
+    {
+     "document": "CFI_PSI-39/pdf/Cool Flames in Space, a Hot Prospect on Earth_CFI.pdf",
+     "page": 3,
+     "quote": "Microgravity droplet combustion experiments aimed at understanding the flammability boundaries of liquid fuels in a variety of ambient conditions – spacecraft fire safety"
+    }
+   ]
+  },
+  "ACME CFI-G": {
+   "tags": [
+    "unknown"
+   ],
+   "rationale": "The documents shipped with PSI-159 (engineering implementation report, daily logs) describe hardware and operations; no statement tying CFI-G to fire prevention, detection or suppression was found in them.",
+   "evidence": []
+  }
+ }
+}
