@@ -9,6 +9,8 @@ endpoints are implemented yet.
 ```text
 app/
   main.py          # Creates the app and registers routers
+  ai/              # Placeholder for AI-assisted data analysis
+    filter_suggestions.py  # Future data filtering suggestions
   routes/          # REST endpoint definitions
     hello.py       # Hello-world endpoint
   services/        # Future data loading and Polars processing logic
@@ -17,6 +19,8 @@ app/
 Add new endpoint routers under `app/routes/` and register them in `app/main.py`.
 Keep data loading and processing in `app/services/`, which routes can call to
 prepare their responses.
+The `app/ai/` package is reserved for future AI-powered filter suggestions; it
+does not implement any AI functionality yet.
 
 ## Run locally
 
