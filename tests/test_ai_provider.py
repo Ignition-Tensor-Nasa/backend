@@ -7,6 +7,7 @@ import pytest
 
 from app.ai import interpret as ai
 from app.ai import provider
+from app.services import catalogue
 
 URL = "/api/v1/filters/interpret"
 SECRET = "test-secret-must-not-appear"
@@ -120,6 +121,10 @@ def test_untrusted_response_is_rejected(client, monkeypatch, name, bad_answer):
     ({"PSI_AI_PROVIDER": "anthropic", "PSI_AI_MODEL": "example/model"}, "ANTHROPIC_API_KEY"),
     ({"PSI_AI_PROVIDER": "openrouter"}, "PSI_AI_MODEL"),
     ({"PSI_AI_PROVIDER": "openrouter", "PSI_AI_MODEL": "example/model"}, "OPENROUTER_API_KEY"),
+    ({"PSI_AI_PROVIDER": "anthropic", "PSI_AI_MODEL": "example/model",
+      "OPENROUTER_API_KEY": SECRET}, "ANTHROPIC_API_KEY"),
+    ({"PSI_AI_PROVIDER": "openrouter", "PSI_AI_MODEL": "example/model",
+      "OPENROUTER_API_KEY": "   "}, "OPENROUTER_API_KEY"),
     ({"PSI_AI_PROVIDER": "unknown"}, "PSI_AI_PROVIDER"),
     ({"PSI_AI_PROVIDER": "anthropic", "PSI_AI_MODEL": "  "}, "PSI_AI_MODEL"),
 ])
@@ -129,6 +134,43 @@ def test_missing_configuration_does_not_break_manual_search(client, monkeypatch,
     response = client.post(URL, json={"text": "anything"})
     assert response.status_code == 503 and missing in response.json()["detail"]
     assert client.post("/api/v1/cases/search", json={"filters": {"fuel": ["methane"]}}).status_code == 200
+
+
+def test_all_missing_settings_are_reported_without_calling_a_provider(client, monkeypatch):
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **kwargs: pytest.fail("provider must not be called"))
+    monkeypatch.setattr(provider.httpx, "post", lambda *args, **kwargs: pytest.fail("provider must not be called"))
+    response = client.post(URL, json={"text": "anything"})
+    detail = response.json()["detail"]
+    assert response.status_code == 503
+    assert all(name in detail for name in ("PSI_AI_PROVIDER", "PSI_AI_MODEL",
+                                          "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"))
+    assert ".env" in detail and "filters" not in response.json()
+
+
+@pytest.mark.parametrize("name, key", [("anthropic", "ANTHROPIC_API_KEY"),
+                                       ("openrouter", "OPENROUTER_API_KEY")])
+def test_all_missing_settings_for_selected_provider_are_reported(client, monkeypatch, name, key):
+    monkeypatch.setenv("PSI_AI_PROVIDER", name)
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 503
+    assert "PSI_AI_MODEL" in response.json()["detail"] and key in response.json()["detail"]
+
+
+def test_configuration_errors_do_not_echo_invalid_settings_or_keys(client, monkeypatch, caplog):
+    monkeypatch.setenv("PSI_AI_PROVIDER", SECRET)
+    monkeypatch.setenv("OPENROUTER_API_KEY", SECRET)
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 503 and "PSI_AI_PROVIDER" in response.json()["detail"]
+    assert SECRET not in response.text and SECRET not in caplog.text
+
+
+def test_missing_catalogue_returns_actionable_error_without_provider_call(client, monkeypatch, tmp_path):
+    configure(monkeypatch, "openrouter")
+    monkeypatch.setattr(provider.httpx, "post", lambda *args, **kwargs: pytest.fail("provider must not be called"))
+    monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path / "missing")
+    catalogue.load_catalogue.cache_clear()
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 503 and "data_prep.prepare" in response.json()["detail"]
 
 
 @pytest.mark.parametrize("name", ["anthropic", "openrouter"])
@@ -220,6 +262,13 @@ def test_malformed_dotenv_is_sanitized_and_manual_search_works(client, caplog):
     assert client.post("/api/v1/cases/search", json={"filters": {}}).status_code == 200
 
 
+def test_unreadable_dotenv_is_sanitized_and_manual_search_works(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(provider, "AI_CONFIG_PATH", tmp_path)  # opening a directory fails
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 503 and "cannot read .env" in response.json()["detail"]
+    assert client.post("/api/v1/cases/search", json={"filters": {}}).status_code == 200
+
+
 @pytest.mark.parametrize("name", ["anthropic", "openrouter"])
 def test_unfinished_answer_never_falls_back_to_demo(client, monkeypatch, name):
     configure(monkeypatch, name)
@@ -228,7 +277,9 @@ def test_unfinished_answer_never_falls_back_to_demo(client, monkeypatch, name):
     assert response.status_code == 503 and "did not finish" in response.json()["detail"]
 
 
-@pytest.mark.parametrize("status, message", [(401, "credentials"), (429, "rate limiting"), (500, "HTTP 500")])
+@pytest.mark.parametrize("status, message", [(400, "PSI_AI_MODEL"), (401, "credentials"),
+                                             (403, "model access"), (404, "PSI_AI_MODEL"),
+                                             (429, "rate limiting"), (500, "HTTP 500")])
 def test_openrouter_http_error_is_sanitized(client, monkeypatch, caplog, status, message):
     configure(monkeypatch, "openrouter")
     monkeypatch.setattr(provider.httpx, "post", lambda *a, **kw: httpx.Response(status, text=SECRET))
@@ -252,7 +303,9 @@ def test_provider_exception_is_sanitized(client, monkeypatch, caplog, name):
     assert SECRET not in response.text and SECRET not in caplog.text
 
 
-@pytest.mark.parametrize("status, message", [(401, "credentials"), (429, "rate limiting"), (503, "HTTP 503")])
+@pytest.mark.parametrize("status, message", [(400, "PSI_AI_MODEL"), (401, "credentials"),
+                                             (403, "model access"), (404, "PSI_AI_MODEL"),
+                                             (429, "rate limiting"), (503, "HTTP 503")])
 def test_anthropic_http_error_is_sanitized(client, monkeypatch, caplog, status, message):
     configure(monkeypatch, "anthropic")
 
