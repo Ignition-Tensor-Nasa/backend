@@ -1,4 +1,4 @@
-from tests.conftest import CSV
+from tests.conftest import CSV, clear_caches
 
 
 def test_case_detail_describes_its_datasets(client):
@@ -15,6 +15,15 @@ def test_case_detail_describes_its_datasets(client):
         ],
         "default_x": "time_s", "default_y": ["signal"],
     }
+
+
+def test_events_are_source_logged_annotations_or_empty(client, tmp_path):
+    assert client.get("/api/v1/cases/T-001").json()["events"] == [
+        {"label": "Ignition", "time_s": 0.5, "dataset_id": "T-001-a", "source": "fixture.txt"}]
+    assert client.get("/api/v1/cases/T-002").json()["events"] == []
+    (tmp_path / "events.json").unlink()  # the artifact is optional
+    clear_caches()
+    assert client.get("/api/v1/cases/T-001").json()["events"] == []
 
 
 def test_case_without_datasets_and_with_null_metadata(client):

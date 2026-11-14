@@ -216,3 +216,17 @@ Cases worth showing:
 Other rehearsed prompts: "Pokaż testy w atmosferze zbliżonej do ziemskiej:
 20-22% tlenu, 95-105 kPa" (10 runs: 4 CFI-G, 6 FLEX) and "Pokaż testy przy
 niskim ciśnieniu, 45-55 kPa" (9 runs); English versions are in `DEMO_PROMPTS`.
+
+## Event annotations (B13)
+
+`CaseDetail.events` lists entries copied from the ACME test-point script log
+(`*_TP.txt`): "Ignition and retraction", "Extinction detected", "MFCs off".
+Each has `label`, `time_s`, `dataset_id` (the dataset whose time axis it uses)
+and `source` (the log file). The prepared artifact is `data/curated/events.json`.
+
+- Method: `time_s` = log wall-clock time minus the clock time of the first
+  sensor sample; the log has 1 s resolution, so markers are accurate to ~1 s.
+- "Extinction detected" is the test script's own log entry. Nothing is
+  detected or inferred here; blank log entries and cases without a log (all
+  FLEX droplet cases) simply have no event, so there is no cross-run
+  time-zero alignment.

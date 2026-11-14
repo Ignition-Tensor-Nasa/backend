@@ -38,11 +38,19 @@ class Dataset(BaseModel):
     default_y: list[str]
 
 
+class Event(BaseModel):
+    label: str
+    time_s: float
+    dataset_id: str  # the dataset whose time_s axis the event refers to
+    source: str
+
+
 class CaseDetail(CaseSummary):
     source_label: str
     source_url: str | None
     note: str | None
     datasets: list[Dataset]
+    events: list[Event]
 
 
 class SearchResponse(BaseModel):

@@ -93,12 +93,19 @@ def load_datasets() -> dict[str, dict]:
     return {item["dataset_id"]: item for item in json.loads(path.read_text("utf-8"))["datasets"]}
 
 
+@lru_cache(maxsize=1)
+def load_events() -> dict[str, list[dict]]:
+    """Optional B13 artifact: source-logged events per case (empty when not prepared)."""
+    path = CURATED_DIR / "events.json"
+    return json.loads(path.read_text("utf-8"))["events"] if path.is_file() else {}
+
+
 def case_detail(case_id: str) -> dict | None:
     rows = load_catalogue().filter(pl.col("case_id") == case_id).to_dicts()
     if not rows:
         return None
     datasets = [item for item in load_datasets().values() if item["case_id"] == case_id]
-    return {**rows[0], "datasets": datasets}
+    return {**rows[0], "datasets": datasets, "events": load_events().get(case_id, [])}
 
 
 def dataset_csv_path(dataset_id: str) -> Path | None:

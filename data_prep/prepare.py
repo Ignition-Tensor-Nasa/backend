@@ -120,10 +120,19 @@ def number(row: dict, key: str) -> float | None:
         return None
 
 
-def tp_events(path: Path, start_clock: float) -> str | None:
-    """Sentence quoting test-point script log entries relative to the first data sample."""
+EVENT_METHOD = (
+    "Entries copied from the test-point script log (*_TP.txt), which records wall-clock times "
+    "at 1 s resolution. time_s = log time minus the clock time of the first sensor sample, so "
+    "it shares the zero of the case's sensor dataset and is accurate to about 1 s. "
+    "'Extinction detected' is the test script's own log entry, not a detection made here. "
+    "Cases without a log, and entries the log leaves blank, have no event; nothing is inferred."
+)
+
+
+def tp_events(path: Path, start_clock: float) -> list[tuple[float, str]]:
+    """(seconds since the first data sample, log entry name), ordered by time."""
     if not path.is_file():
-        return None
+        return []
     events = []
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         name, _, stamp = line.partition(":")
@@ -131,7 +140,11 @@ def tp_events(path: Path, start_clock: float) -> str | None:
         if name.strip() in TP_EVENTS and clock:
             offset = (clock_seconds(clock.group(1)) - start_clock + 43200) % 86400 - 43200
             events.append((offset, name.strip()))
-    parts = "; ".join(f"“{name}” at t≈{offset:.0f} s" for offset, name in sorted(events))
+    return sorted(events)
+
+
+def events_sentence(events: list[tuple[float, str]]) -> str | None:
+    parts = "; ".join(f"“{name}” at t≈{offset:.0f} s" for offset, name in events)
     return f"Test-point script log entries (1 s resolution): {parts}." if events else None
 
 
@@ -201,6 +214,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
         except Skip as reason:
             print(f"SKIPPED {case_id}: {reason}")
             continue
+        events = tp_events(family / "txt" / (prefix + "TP.txt"), start)
         fuel_label = text(row, "Fuel")
         o2 = number(row, "XO2 before test")
         bar = number(row, "approx p (bar)")
@@ -221,8 +235,11 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             "source_label": f"NASA PSI-159 ACME CFI-G, test point {test_id}: "
                             f"{TABLE}; {prefix}data.csv",
             "source_url": None,
-            "note": build_note(row, entry.get("highlight"), tp_events(
-                family / "txt" / (prefix + "TP.txt"), start)),
+            "note": build_note(row, entry.get("highlight"), events_sentence(events)),
+            # B13: popped by prepare() into events.json.
+            "_events": [{"label": name, "time_s": round(offset, 3),
+                         "dataset_id": f"{case_id}-sensors", "source": prefix + "TP.txt"}
+                        for offset, name in events],
         }, exports
 
 
@@ -233,13 +250,14 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
     csv_dir = out_dir / "csv"
     shutil.rmtree(csv_dir, ignore_errors=True)
     csv_dir.mkdir(parents=True)
-    cases, datasets = [], []
+    cases, datasets, events = [], [], {}
     for case, exports in (*cfig_cases(data_dir, manifest["cases"]),
                           *flex_cases(data_dir, manifest.get("flex_cases", []))):
         for meta, frame in exports:
             assert frame.columns == [column["key"] for column in meta["columns"]]
             frame.write_csv(csv_dir / meta["file"])
             datasets.append(meta)
+        events[case["case_id"]] = case.pop("_events", [])
         cases.append(case)
     if not cases:
         raise SystemExit("No case could be prepared.")
@@ -249,6 +267,8 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
     catalogue.write_parquet(out_dir / "catalogue.parquet")
     (out_dir / "datasets.json").write_text(
         json.dumps({"datasets": datasets}, ensure_ascii=False, indent=1), "utf-8")
+    (out_dir / "events.json").write_text(json.dumps(
+        {"method": EVENT_METHOD, "events": events}, ensure_ascii=False, indent=1), "utf-8")
     size = sum(path.stat().st_size for path in csv_dir.iterdir()) / 1e6
     print(f"{catalogue.height} cases, {len(datasets)} datasets, {size:.1f} MB of CSV -> {out_dir}")
 

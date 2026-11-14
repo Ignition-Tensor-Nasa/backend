@@ -36,6 +36,7 @@ def dataset(dataset_id, case_id, file):
 def clear_caches():
     catalogue.load_catalogue.cache_clear()
     catalogue.load_datasets.cache_clear()
+    catalogue.load_events.cache_clear()
 
 
 @pytest.fixture
@@ -55,6 +56,8 @@ def client(tmp_path, monkeypatch):
         dataset("T-001-gone", "T-001", "T-001-gone.csv"),
         dataset("T-002-escape", "T-002", "../secret.csv"),
     ]}), "utf-8")
+    (tmp_path / "events.json").write_text(json.dumps({"method": "fixture", "events": {"T-001": [
+        {"label": "Ignition", "time_s": 0.5, "dataset_id": "T-001-a", "source": "fixture.txt"}]}}), "utf-8")
     monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path)
     clear_caches()
     yield TestClient(app)
