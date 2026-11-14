@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 from app.services.catalogue import (
@@ -46,12 +48,26 @@ class Event(BaseModel):
     source: str
 
 
+class Evidence(BaseModel):
+    document: str
+    page: int
+    quote: str
+
+
+class ResearchContext(BaseModel):
+    tags: list[Literal["prevention", "detection", "suppression", "unknown"]]
+    rationale: str
+    evidence: list[Evidence]
+    disclaimer: str
+
+
 class CaseDetail(CaseSummary):
     source_label: str
     source_url: str | None
     note: str | None
     datasets: list[Dataset]
     events: list[Event]
+    research_context: ResearchContext
 
 
 class SearchResponse(BaseModel):

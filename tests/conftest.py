@@ -38,6 +38,7 @@ def clear_caches():
     catalogue.load_datasets.cache_clear()
     catalogue.load_events.cache_clear()
     catalogue.load_neighbors.cache_clear()
+    catalogue.load_context.cache_clear()
 
 
 @pytest.fixture
@@ -59,6 +60,9 @@ def client(tmp_path, monkeypatch):
     ]}), "utf-8")
     (tmp_path / "events.json").write_text(json.dumps({"method": "fixture", "events": {"T-001": [
         {"label": "Ignition", "time_s": 0.5, "dataset_id": "T-001-a", "source": "fixture.txt"}]}}), "utf-8")
+    (tmp_path / "context.json").write_text(json.dumps({"disclaimer": "grouping only", "investigations": {
+        "INV-A": {"tags": ["suppression"], "rationale": "fixture", "evidence": [
+            {"document": "fixture.pdf", "page": 2, "quote": "fixture quote"}]}}}), "utf-8")
     (tmp_path / "neighbors.json").write_text(json.dumps({"metric": "fixture metric", "neighbors": {
         "T-001": [{"case_id": "T-003", "distance": 0.5}, {"case_id": "T-002", "distance": 2.0},
                   {"case_id": "T-gone", "distance": 3.0}]}}), "utf-8")

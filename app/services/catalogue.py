@@ -120,12 +120,31 @@ def case_neighbors(case_id: str) -> dict | None:
     return {"metric": artifact["metric"], "items": items}
 
 
+UNKNOWN_CONTEXT = {"tags": ["unknown"], "rationale": "No reviewed research context.", "evidence": []}
+
+
+@lru_cache(maxsize=1)
+def load_context() -> dict:
+    """Optional B14 artifact: reviewed research-context tags per investigation."""
+    path = CURATED_DIR / "context.json"
+    if not path.is_file():
+        return {"disclaimer": "", "investigations": {}}
+    return json.loads(path.read_text("utf-8"))
+
+
+def research_context(investigation: str) -> dict:
+    context = load_context()
+    return {**context["investigations"].get(investigation, UNKNOWN_CONTEXT),
+            "disclaimer": context["disclaimer"]}
+
+
 def case_detail(case_id: str) -> dict | None:
     rows = load_catalogue().filter(pl.col("case_id") == case_id).to_dicts()
     if not rows:
         return None
     datasets = [item for item in load_datasets().values() if item["case_id"] == case_id]
-    return {**rows[0], "datasets": datasets, "events": load_events().get(case_id, [])}
+    return {**rows[0], "datasets": datasets, "events": load_events().get(case_id, []),
+            "research_context": research_context(rows[0]["investigation"])}
 
 
 def dataset_csv_path(dataset_id: str) -> Path | None:

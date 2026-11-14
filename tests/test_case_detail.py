@@ -39,6 +39,14 @@ def test_neighbors_are_precomputed_summaries_with_the_metric(client, tmp_path):
     assert client.get("/api/v1/cases/T-001/neighbors").json()["items"] == []
 
 
+def test_research_context_links_to_evidence_or_is_unknown(client):
+    known = client.get("/api/v1/cases/T-001").json()["research_context"]
+    assert known["tags"] == ["suppression"] and known["disclaimer"] == "grouping only"
+    assert known["evidence"] == [{"document": "fixture.pdf", "page": 2, "quote": "fixture quote"}]
+    unknown = client.get("/api/v1/cases/T-004").json()["research_context"]  # INV-B: not reviewed
+    assert unknown["tags"] == ["unknown"] and unknown["evidence"] == []
+
+
 def test_case_without_datasets_and_with_null_metadata(client):
     body = client.get("/api/v1/cases/T-005").json()
     assert body["datasets"] == [] and body["fuel"] is None and body["o2_pct"] is None

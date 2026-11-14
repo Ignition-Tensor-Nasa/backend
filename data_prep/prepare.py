@@ -272,6 +272,12 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         {"method": EVENT_METHOD, "events": events}, ensure_ascii=False, indent=1), "utf-8")
     (out_dir / "neighbors.json").write_text(json.dumps(
         {"metric": METRIC, "neighbors": nearest_neighbours(catalogue)}, indent=1), "utf-8")
+    context = json.loads((Path(__file__).parent / "research_context.json").read_text("utf-8"))
+    for name, item in context["investigations"].items():
+        allowed = set(item["tags"]) <= {"prevention", "detection", "suppression", "unknown"}
+        if not allowed or (item["tags"] != ["unknown"] and not item["evidence"]):
+            raise SystemExit(f"research_context.json: {name} needs valid tags with evidence")
+    (out_dir / "context.json").write_text(json.dumps(context, ensure_ascii=False, indent=1), "utf-8")
     size = sum(path.stat().st_size for path in csv_dir.iterdir()) / 1e6
     print(f"{catalogue.height} cases, {len(datasets)} datasets, {size:.1f} MB of CSV -> {out_dir}")
 

@@ -263,3 +263,19 @@ artifact `data/curated/neighbors.json` is rebuilt by the preparation script.
 
 The distance only says how close the test conditions are. It is not a
 calibrated similarity or a safety score, and no UMAP embedding is produced.
+
+## Research-context tags (B14)
+
+`CaseDetail.research_context` groups studies by fire-safety research context:
+`tags` (any of `prevention`, `detection`, `suppression`, or `unknown`),
+`rationale`, `evidence` (`document`, `page`, verbatim `quote`) and a
+`disclaimer`. Tags are reviewed by hand per investigation in
+`data_prep/research_context.json`; the script refuses a tag without evidence.
+
+- `CFI (FLEX)`: `prevention`, backed by two quotes from the CFI overview
+  presentation (cool flames can re-ignite; flammability boundaries).
+- `ACME CFI-G`: `unknown`. The documents shipped with PSI-159 contain no
+  statement tying it to prevention, detection or suppression.
+
+The tags only group research context. They do not certify the fire-safety
+performance of anything.
