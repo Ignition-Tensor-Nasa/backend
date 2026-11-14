@@ -101,6 +101,14 @@ What is and is not verified:
 - Only ACME CFI-G normal flames are curated, so `o2_pct` always means the
   chamber O₂ mole fraction before the test. `pressure_kpa` is the table's
   approximate pressure, bar × 100.
+- Sensor units: pressure (PTA1-3, kPa), MFC flow (SLPM, at the device's full
+  scale from the file header) and PMT current (µA) are converted with the
+  formulas in NASA's "ACME non-imaging data file description"
+  (`ACME-E-FIELD-Flames_PSI-22/pdf`); the ion-current channel is the signal
+  voltage. Thermocouple and radiometer channels stay raw (unit `null`): the
+  conversions depend on hardware (array type, calibration) that the files do
+  not identify. The chamber pressure from PTA3 can differ a few percent from
+  the table's "approximate pressure".
 - `time_s` is seconds since the first sensor sample (both datasets of a case
   share that zero). Source timestamps can jitter by a few milliseconds (one
   known 2 ms backward step in 21174F1); the API returns rows ordered by time. Sensor channels keep their raw recorded values with a null

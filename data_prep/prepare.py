@@ -22,32 +22,58 @@ BAR_TO_KPA = 100.0
 
 # Raw column -> label. Units are null: the source files do not state them
 # (signals look like raw volts, which is not verified), so nothing is converted.
-CHANNELS = {
-    "MFCA1StaticMixerFlow": "MFC A1 static mixer flow (raw)",
-    "MFCA2BypassFlow": "MFC A2 bypass flow (raw)",
-    "MFCA3FuelFlow": "MFC A3 fuel flow (raw)",
-    "IonCurrent": "Ion current (raw)",
-    "PTA1": "Pressure transducer PTA1 (raw)",
-    "PTA2": "Pressure transducer PTA2 (raw)",
-    "PTA3": "Pressure transducer PTA3 (raw)",
-    "PMT1": "Photomultiplier PMT1 (raw)",
-    "PMT2": "Photomultiplier PMT2 (raw)",
-    "PMT3": "Photomultiplier PMT3 (raw)",
-    "TCA": "Thermocouple TCA (raw)",
-    "TCB": "Thermocouple TCB (raw)",
-    "TCC": "Thermocouple TCC (raw)",
-    "TCD": "Thermocouple TCD (raw)",
-    "TCBurner": "Burner thermocouple (raw)",
-    "Radiometer3+60LoGain": "Radiometer +60, low gain (raw)",
-    "Radiometer3+30LoGain": "Radiometer +30, low gain (raw)",
-    "Radiometer3-10LoGain": "Radiometer -10, low gain (raw)",
-    "RadiometerOffset": "Offset radiometer (raw)",
+# Raw column -> (label, unit). Pressure and flow are converted with the formulas of NASA's
+# "ACME non-imaging data file description" (see convert_acme); the other channels keep the
+# raw recorded values and have no stated unit.
+CHANNEL_INFO = {
+    "MFCA1StaticMixerFlow": ("MFC A1 static mixer (oxidizer) flow", "SLPM"),
+    "MFCA2BypassFlow": ("MFC A2 bypass (inert) flow", "SLPM"),
+    "MFCA3FuelFlow": ("MFC A3 fuel flow", "SLPM"),
+    "IonCurrent": ("Ion current signal (raw voltage)", "V"),
+    "PTA1": ("Outer coflow pressure (PTA1)", "kPa"),
+    "PTA2": ("Inner coflow / burner pressure (PTA2)", "kPa"),
+    "PTA3": ("Chamber pressure (PTA3)", "kPa"),
+    "PMT1": ("Photomultiplier PMT1 current (310 nm band)", "µA"),
+    "PMT2": ("Photomultiplier PMT2 current (broadband, neutral density)", "µA"),
+    "PMT3": ("Photomultiplier PMT3 current (430 nm band)", "µA"),
+    "TCA": ("Thermocouple TCA (raw)", None),
+    "TCB": ("Thermocouple TCB (raw)", None),
+    "TCC": ("Thermocouple TCC (raw)", None),
+    "TCD": ("Thermocouple TCD (raw)", None),
+    "TCBurner": ("Burner thermocouple (raw)", None),
+    "Radiometer3+60LoGain": ("Radiometer +60, low gain (raw)", None),
+    "Radiometer3+30LoGain": ("Radiometer +30, low gain (raw)", None),
+    "Radiometer3-10LoGain": ("Radiometer -10, low gain (raw)", None),
+    "RadiometerOffset": ("Offset radiometer (raw)", None),
 }
+CHANNELS = {key: label for key, (label, _) in CHANNEL_INFO.items()}
+PSI_TO_KPA = 6.894757293168
+FLOWS = {"MFCA1StaticMixerFlow": "MFCA1", "MFCA2BypassFlow": "MFCA2", "MFCA3FuelFlow": "MFCA3"}
+
+
+def acme_scales(path: Path) -> dict[str, float]:
+    """MFC full-scale flows (SLPM) from the first line of a raw ACME recording."""
+    first = path.read_bytes().split(b"\n", 1)[0].decode("utf-8", errors="replace")
+    return {name: float(value) for name, value in re.findall(r"(MFCA\d) Full Scale: ([\d.]+)", first)}
+
+
+def convert_acme(frame: pl.DataFrame, scales: dict[str, float]) -> pl.DataFrame:
+    """Pressure to kPa and flows to SLPM, as in NASA's ACME non-imaging data file description:
+    psia = (V - 0.5) * 14.5038 * 10 / 4;  SLPM = V / 5 * full scale. Missing scales skip a flow."""
+    exprs = [((pl.col(key) - 0.5) * 14.5038 * 10 / 4 * PSI_TO_KPA).alias(key)
+             for key in ("PTA1", "PTA2", "PTA3") if key in frame.columns]
+    exprs += [(pl.col(key) / 5 * scales[mfc]).alias(key)
+              for key, mfc in FLOWS.items() if key in frame.columns and mfc in scales]
+    return frame.with_columns(exprs)
+
+
 SETPOINTS = {f"MFCA{n}Setpoint(V)": f"MFC A{n} setpoint" for n in (1, 2, 3)}
 SENSOR_NOTE = (
-    "Full raw recording, every sample kept (documented rate 125 Hz); no sampling or "
-    "interpolation. Channel units are not stated in the source files, so values are "
-    "unconverted. time_s counts from the first sample."
+    "Full recording, every sample kept (documented rate 125 Hz); no sampling or interpolation. "
+    "Pressures (kPa), MFC flows (SLPM at the device's full scale) and PMT currents (µA) use the "
+    "conversions in NASA's ACME non-imaging data file description; ion current is the signal "
+    "voltage. Thermocouple and radiometer channels keep the raw recorded values because the "
+    "source files state no unit. time_s counts from the first sample."
 )
 SETPOINT_NOTE = (
     "Commanded setpoint log as recorded; entries with the same timestamp are in the source. "
@@ -251,10 +277,12 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             # A second recording (e.g. *_data2.csv) makes the link ambiguous.
             if len(list((family / "csv").glob(prefix + "data*.csv"))) != 1:
                 raise Skip("not exactly one *_data.csv recording")
-            data, start = read_series(family / "csv" / (prefix + "data.csv"), test_id, CHANNELS)
+            data_path = family / "csv" / (prefix + "data.csv")
+            data, start = read_series(data_path, test_id, CHANNELS)
+            data = convert_acme(data, acme_scales(data_path))
             exports = [(descriptor(
-                f"{case_id}-sensors", case_id, "Sensor recording (raw channels)",
-                {key: (label, None) for key, label in CHANNELS.items()},
+                f"{case_id}-sensors", case_id, "Sensor recording (converted where documented)",
+                dict(CHANNEL_INFO),
                 ["Radiometer3+30LoGain", "PMT1", "MFCA3FuelFlow"], SENSOR_NOTE), data)]
             try:
                 setpoints, _ = read_series(

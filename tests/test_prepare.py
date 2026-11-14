@@ -86,3 +86,21 @@ def test_two_pass_vocabulary_proposal_classification_and_comparison():
     changed = pl.DataFrame([row | {"fuel": None}, row | {"case_id": "b"}])
     assert two_pass.differences(same, changed) == [
         "b: only in curated output", "a.fuel: two-pass 'dodecane' != curated None"]
+
+
+def test_acme_conversions_follow_the_nasa_formulas(tmp_path):
+    from data_prep.prepare import acme_scales, convert_acme
+
+    recording = tmp_path / "x_data.csv"
+    recording.write_text("2021-01-01 1 00:00:00:000 ,MFCA1 Full Scale: 20.000000,MFCA3 Full Scale: 0.500000\n")
+    scales = acme_scales(recording)
+    assert scales == {"MFCA1": 20.0, "MFCA3": 0.5}
+    frame = pl.DataFrame({"PTA3": [0.5, 1.32], "MFCA1StaticMixerFlow": [2.5, 5.0],
+                          "MFCA3FuelFlow": [1.0, 5.0], "MFCA2BypassFlow": [1.0, 1.0], "PMT1": [1.0, 2.0]})
+    out = convert_acme(frame, scales)
+    assert out["PTA3"].to_list() == pytest.approx([0.0, (1.32 - 0.5) * 36.2595 * 6.894757293168 * 1 / 1.0], rel=1e-3)
+    assert out["PTA3"][1] == pytest.approx(205.0, abs=0.5)  # 29.7 psia
+    assert out["MFCA1StaticMixerFlow"].to_list() == [10.0, 20.0]
+    assert out["MFCA3FuelFlow"].to_list() == [0.1, 0.5]
+    assert out["MFCA2BypassFlow"].to_list() == [1.0, 1.0]  # no scale in the header: left untouched
+    assert out["PMT1"].to_list() == [1.0, 2.0]
