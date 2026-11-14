@@ -97,6 +97,17 @@ What is and is not verified:
 - `fuel` is the base hydrocarbon; the table's label (e.g. "30% butane") stays
   in the title and the fuel mole fraction in the note.
 
+## Filter options (B02)
+
+`GET /api/v1/filters` returns the categories and known numeric bounds present
+in the curated catalogue (`null` bounds when no case has that value):
+
+```json
+{"investigation": ["ACME CFI-G"], "fuel": ["butane", "ethane", "propane"],
+ "o2_pct": {"min": 17.969, "max": 39.655},
+ "pressure_kpa": {"min": 50.665, "max": 303.99}}
+```
+
 ## Case search (B03)
 
 `POST /api/v1/cases/search` filters the curated case catalogue and returns

@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.routes.cases import router as cases_router
+from app.routes.filters import router as filters_router
 from app.routes.hello import router as hello_router
+from app.services.catalogue import CatalogueUnavailable
 
 app = FastAPI(title="PSI-Lens API")
 app.add_middleware(
@@ -21,6 +23,12 @@ app.add_middleware(
 )
 app.include_router(hello_router)
 app.include_router(cases_router)
+app.include_router(filters_router)
+
+
+@app.exception_handler(CatalogueUnavailable)
+async def catalogue_unavailable(request: Request, error: CatalogueUnavailable) -> JSONResponse:
+    return JSONResponse({"detail": str(error)}, status_code=503)
 
 
 @app.exception_handler(RequestValidationError)

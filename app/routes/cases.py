@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from app.services.catalogue import CatalogueUnavailable, Filters, search_cases
+from app.services.catalogue import Filters, search_cases
 
 router = APIRouter(prefix="/api/v1")
 
@@ -30,8 +30,6 @@ class SearchResponse(BaseModel):
 def search(request: SearchRequest = SearchRequest()) -> SearchResponse:
     try:
         items = search_cases(request.filters or Filters())
-    except CatalogueUnavailable as error:
-        raise HTTPException(503, str(error)) from error
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     return SearchResponse(items=items, total=len(items))

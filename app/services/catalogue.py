@@ -73,6 +73,16 @@ def load_catalogue() -> pl.DataFrame:
     return df.with_columns(cs.float().fill_nan(None))
 
 
+def filter_options() -> dict:
+    """Actual categories and known numeric bounds of the curated catalogue."""
+    df = load_catalogue()
+    options: dict = {key: sorted(df[key].drop_nulls().unique()) for key in CATEGORY_KEYS}
+    for key in RANGE_KEYS:
+        known = df[key].drop_nulls()
+        options[key] = {"min": known.min(), "max": known.max()} if len(known) else None
+    return options
+
+
 def search_cases(filters: Filters) -> list[dict]:
     """All matching case summaries ordered by case ID. ValueError on unknown categories."""
     df = load_catalogue()

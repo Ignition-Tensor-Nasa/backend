@@ -104,9 +104,27 @@ def test_unknown_category_detail_is_a_string(client):
     assert "kerosene" in detail
 
 
+def test_filter_options_come_from_the_catalogue(client):
+    assert client.get("/api/v1/filters").json() == {
+        "investigation": ["INV-A", "INV-B"],
+        "fuel": ["ethylene", "methane"],
+        "o2_pct": {"min": 21.0, "max": 40.0},  # null and NaN are not bounds
+        "pressure_kpa": {"min": 50.0, "max": 200.0},
+    }
+
+
+def test_filter_bounds_are_null_when_nothing_is_known(client, tmp_path):
+    pl.read_parquet(tmp_path / "catalogue.parquet").with_columns(
+        pl.lit(None, dtype=pl.Float64).alias("o2_pct")
+    ).write_parquet(tmp_path / "catalogue.parquet")
+    catalogue.load_catalogue.cache_clear()
+    assert client.get("/api/v1/filters").json()["o2_pct"] is None
+
+
 def test_missing_catalogue_is_503(client, tmp_path, monkeypatch):
     monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path / "absent")
     catalogue.load_catalogue.cache_clear()
     response = client.post(URL, json={})
     assert response.status_code == 503
     assert "B01" in response.json()["detail"]
+    assert client.get("/api/v1/filters").status_code == 503
