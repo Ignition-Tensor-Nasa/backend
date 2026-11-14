@@ -332,6 +332,11 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         if not allowed or (item["tags"] != ["unknown"] and not item["evidence"]):
             raise SystemExit(f"research_context.json: {name} needs valid tags with evidence")
     (out_dir / "context.json").write_text(json.dumps(context, ensure_ascii=False, indent=1), "utf-8")
+    from data_prep.prepare_saffire import prepare_saffire
+
+    saffire = prepare_saffire(data_dir, out_dir)
+    if saffire is not None:
+        print(f"Prepared {len(saffire['items'])} bespoke SAFFIRE-III cases -> {out_dir / 'saffire3.json'}")
     size = sum(path.stat().st_size for path in parquet_dir.iterdir()) / 1e6
     print(f"{catalogue.height} cases, {len(datasets)} datasets, {size:.1f} MB of Parquet -> {out_dir}")
 

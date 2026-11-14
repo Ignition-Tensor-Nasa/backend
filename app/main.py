@@ -10,6 +10,7 @@ from app.ai.provider import AIUnavailable
 from app.routes.cases import router as cases_router
 from app.routes.filters import router as filters_router
 from app.routes.hello import router as hello_router
+from app.routes.special_cases import router as special_cases_router
 from app.services.catalogue import CatalogueUnavailable
 
 app = FastAPI(title="PSI-Lens API")
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(hello_router)
 app.include_router(cases_router)
 app.include_router(filters_router)
+app.include_router(special_cases_router)
 
 
 @app.exception_handler(CatalogueUnavailable)
