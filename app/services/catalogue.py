@@ -117,16 +117,22 @@ def filter_options() -> dict:
     return options
 
 
+def check_categories(filters: Filters) -> None:
+    """ValueError when a category value does not exist in the catalogue."""
+    df = load_catalogue()
+    for key in CATEGORY_KEYS:
+        if unknown := set(getattr(filters, key) or ()) - set(df[key].drop_nulls()):
+            raise ValueError(f"Unknown {key} value(s): {sorted(unknown)}")
+
+
 def search_cases(filters: Filters) -> list[dict]:
     """All matching case summaries ordered by case ID. ValueError on unknown categories."""
+    check_categories(filters)
     df = load_catalogue()
     for key in CATEGORY_KEYS:
         wanted = getattr(filters, key)
-        if wanted is None:
-            continue
-        if unknown := set(wanted) - set(df[key].drop_nulls()):
-            raise ValueError(f"Unknown {key} value(s): {sorted(unknown)}")
-        df = df.filter(pl.col(key).is_in(wanted))
+        if wanted is not None:
+            df = df.filter(pl.col(key).is_in(wanted))
     for key in RANGE_KEYS:
         bounds = getattr(filters, key)
         if bounds is None:
