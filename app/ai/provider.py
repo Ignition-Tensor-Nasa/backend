@@ -108,18 +108,24 @@ class OpenRouterProvider:
     def call_json(self, system: str, user: str, schema: dict, effort: str, timeout: float) -> dict:
         # OpenRouter's JSON-schema response format is supported only by some models.
         # Require a compatible upstream rather than silently dropping the schema.
+        reasoning = ai_settings().get("PSI_AI_REASONING_EFFORT", "").strip().lower()
+        if reasoning and reasoning not in {"none", "minimal", "low", "medium", "high", "xhigh", "max"}:
+            raise AIUnavailable("The AI assistant is not configured (invalid PSI_AI_REASONING_EFFORT).")
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}],
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "response", "strict": True, "schema": schema}},
+            "provider": {"require_parameters": True},
+        }
+        if reasoning:
+            payload["reasoning"] = {"effort": reasoning, "exclude": True}
         try:
             response = httpx.post(
                 OPENROUTER_URL,
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "system", "content": system},
-                                 {"role": "user", "content": user}],
-                    "response_format": {"type": "json_schema", "json_schema": {
-                        "name": "response", "strict": True, "schema": schema}},
-                    "provider": {"require_parameters": True},
-                },
+                json=payload,
                 timeout=timeout,
             )
         except httpx.RequestError:
