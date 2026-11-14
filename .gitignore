@@ -4,3 +4,4 @@ __pycache__/
 /prompt.txt
 /data/
 polars_analysis/outputs/
+.env

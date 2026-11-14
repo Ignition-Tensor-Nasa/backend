@@ -1,12 +1,24 @@
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.routes.cases import router as cases_router
 from app.routes.hello import router as hello_router
 
-app = FastAPI(title="Plot Data API")
+app = FastAPI(title="PSI-Lens API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    ).split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
+)
 app.include_router(hello_router)
 app.include_router(cases_router)
 

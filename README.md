@@ -49,6 +49,11 @@ With either setup, run:
 python3 -m uvicorn app.main:app --reload
 ```
 
+Optional settings are environment variables listed in `.env.example`
+(`cp .env.example .env`, edit, then `set -a; . ./.env; set +a` before starting).
+The server starts without any of them and without an LLM key. CORS allows the
+local frontend origins in `CORS_ORIGINS`.
+
 Visit <http://127.0.0.1:8000/> or run:
 
 ```sh
