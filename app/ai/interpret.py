@@ -7,11 +7,8 @@ as manual search before it is returned; nothing the model writes is executed.
 import json
 import os
 
-from pydantic import ValidationError
-
+from app.ai.provider import AIUnavailable, call_json
 from app.services.catalogue import CATEGORY_KEYS, RANGE_KEYS, Filters, check_categories, filter_options
-
-MODEL = os.environ.get("PSI_AI_MODEL", "claude-opus-5-5")
 
 # Rehearsed prompts -> reviewed complete filter states (PSI_AI_MODE=demo only).
 DEMO_PROMPTS = {
@@ -59,10 +56,6 @@ leave the filters as they are and add a warning saying what is not available.
 was applied exactly."""
 
 
-class AIUnavailable(RuntimeError):
-    """The assistant could not produce a usable filter state; manual search still works."""
-
-
 def _nullable(schema: dict) -> dict:
     return {"anyOf": [schema, {"type": "null"}]}
 
@@ -91,44 +84,12 @@ def _schema(options: dict) -> dict:
 
 def ask_provider(text: str, current: dict, options: dict) -> dict:
     """One Claude call returning {"filters": ..., "warnings": [...]} as parsed JSON."""
-    try:
-        import anthropic
-    except ImportError as error:
-        raise AIUnavailable("The anthropic package is not installed on the server.") from error
-    try:
-        # The key stays server-side: the SDK reads ANTHROPIC_API_KEY from the environment.
-        client = anthropic.Anthropic(timeout=30.0, max_retries=1)
-        response = client.beta.messages.create(
-            model=MODEL,
-            max_tokens=16000,
-            system=SYSTEM,
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": _schema(options)}},
-            # If a safety classifier declines, the API retries on its default fallback model.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            messages=[{"role": "user", "content": json.dumps({
-                "valid_values": {key: options[key] for key in CATEGORY_KEYS},
-                "known_data_bounds": {key: options[key] for key in RANGE_KEYS},
-                "current_filters": current,
-                "user_description": text,
-            }, ensure_ascii=False)}],
-        )
-    except anthropic.AuthenticationError as error:
-        raise AIUnavailable("The AI provider rejected the server's credentials.") from error
-    except anthropic.RateLimitError as error:
-        raise AIUnavailable("The AI provider is rate limiting requests; try again shortly.") from error
-    except anthropic.APIStatusError as error:
-        raise AIUnavailable(f"The AI provider returned an error (HTTP {error.status_code}).") from error
-    except anthropic.APIConnectionError as error:  # includes timeouts
-        raise AIUnavailable("The AI provider could not be reached.") from error
-    except Exception as error:  # e.g. no credentials configured at all
-        raise AIUnavailable("The AI assistant is not configured (set ANTHROPIC_API_KEY).") from error
-    if response.stop_reason != "end_turn":
-        raise AIUnavailable(f"The AI provider did not finish its answer ({response.stop_reason}).")
-    try:
-        return json.loads(next(block.text for block in response.content if block.type == "text"))
-    except (StopIteration, ValueError) as error:
-        raise AIUnavailable("The AI provider returned invalid JSON.") from error
+    return call_json(SYSTEM, json.dumps({
+        "valid_values": {key: options[key] for key in CATEGORY_KEYS},
+        "known_data_bounds": {key: options[key] for key in RANGE_KEYS},
+        "current_filters": current,
+        "user_description": text,
+    }, ensure_ascii=False), _schema(options), effort="low", timeout=30.0)
 
 
 def _validated(raw) -> Filters:

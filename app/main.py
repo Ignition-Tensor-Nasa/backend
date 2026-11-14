@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.ai.interpret import AIUnavailable
+from app.ai.provider import AIUnavailable
 from app.routes.cases import router as cases_router
 from app.routes.filters import router as filters_router
 from app.routes.hello import router as hello_router
