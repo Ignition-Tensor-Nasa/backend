@@ -34,3 +34,20 @@ def test_elapsed_seconds_uses_first_sample_and_continues_past_midnight():
 
 def test_elapsed_seconds_against_another_recordings_start():
     assert elapsed_seconds(["17:12:12:622", "17:12:13:631"], start=61932.631) == [-0.009, 1.0]
+
+
+def test_nearest_neighbours_scale_within_investigation_and_skip_missing_values():
+    from data_prep.similarity import nearest_neighbours
+
+    catalogue = pl.DataFrame({
+        "case_id": ["a", "b", "c", "d", "x", "y"],
+        "investigation": ["one"] * 4 + ["two"] * 2,
+        "o2_pct": [20.0, 21.0, 40.0, None, 20.0, 20.5],
+        "pressure_kpa": [100.0, 100.0, 100.0, 100.0, 50.0, 500.0],
+    })
+    result = nearest_neighbours(catalogue, k=2)
+    assert [item["case_id"] for item in result["a"]] == ["b", "c"]  # pressure is constant: no effect
+    assert result["a"][0]["distance"] < result["a"][1]["distance"]
+    assert result["d"] == []  # unknown oxygen: no neighbours, and nobody's neighbour
+    assert all(item["case_id"] != "d" for items in result.values() for item in items)
+    assert [item["case_id"] for item in result["x"]] == ["y"]  # never across investigations

@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
-from app.services.catalogue import Filters, case_detail, dataset_csv_path, search_cases
+from app.services.catalogue import (
+    Filters, case_detail, case_neighbors, dataset_csv_path, search_cases)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -73,6 +74,24 @@ def detail(case_id: str) -> CaseDetail:
     if case is None:
         raise HTTPException(404, f"Unknown case: {case_id}")
     return CaseDetail(**case)
+
+
+class Neighbor(BaseModel):
+    case: CaseSummary
+    distance: float
+
+
+class Neighbors(BaseModel):
+    metric: str
+    items: list[Neighbor]
+
+
+@router.get("/cases/{case_id}/neighbors")
+def neighbors(case_id: str) -> Neighbors:
+    result = case_neighbors(case_id)
+    if result is None:
+        raise HTTPException(404, f"Unknown case: {case_id}")
+    return Neighbors(**result)
 
 
 @router.get("/datasets/{dataset_id}/csv")

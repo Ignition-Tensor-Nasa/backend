@@ -245,3 +245,21 @@ fitted line, empty outside the fit window).
   reports kavg = 0.426 mm²/s, computed by a method not documented in the
   files used here, so the two are shown side by side, not equated.
 - No uncertainty band, no residual or predictive model, no fit for other runs.
+
+## Nearest cases (B11)
+
+`GET /api/v1/cases/{case_id}/neighbors` returns
+`{"metric": string, "items": [{"case": CaseSummary, "distance": number}]}`:
+up to 5 precomputed nearest cases, closest first (unknown case: 404). The
+artifact `data/curated/neighbors.json` is rebuilt by the preparation script.
+
+- Features: `o2_pct` and `pressure_kpa` only.
+- Scaling: each feature standardised (zero mean, unit standard deviation)
+  within the case's investigation; neighbours are never taken across
+  investigations.
+- Missing data: a case lacking either value (FLEX-1213) has no neighbours and
+  is nobody's neighbour.
+- Metric: Euclidean distance in that standardised plane, ties by case ID.
+
+The distance only says how close the test conditions are. It is not a
+calibrated similarity or a safety score, and no UMAP embedding is produced.

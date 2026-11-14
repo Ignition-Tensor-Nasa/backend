@@ -100,6 +100,26 @@ def load_events() -> dict[str, list[dict]]:
     return json.loads(path.read_text("utf-8"))["events"] if path.is_file() else {}
 
 
+@lru_cache(maxsize=1)
+def load_neighbors() -> dict:
+    """Optional B11 artifact: {"metric": str, "neighbors": {case_id: [...]}}."""
+    path = CURATED_DIR / "neighbors.json"
+    if not path.is_file():
+        return {"metric": "No similarity artifact has been prepared.", "neighbors": {}}
+    return json.loads(path.read_text("utf-8"))
+
+
+def case_neighbors(case_id: str) -> dict | None:
+    """Precomputed nearest cases with their summaries; None for an unknown case."""
+    summaries = {row["case_id"]: row for row in load_catalogue().select(SUMMARY_COLUMNS).to_dicts()}
+    if case_id not in summaries:
+        return None
+    artifact = load_neighbors()
+    items = [{"case": summaries[item["case_id"]], "distance": item["distance"]}
+             for item in artifact["neighbors"].get(case_id, []) if item["case_id"] in summaries]
+    return {"metric": artifact["metric"], "items": items}
+
+
 def case_detail(case_id: str) -> dict | None:
     rows = load_catalogue().filter(pl.col("case_id") == case_id).to_dicts()
     if not rows:

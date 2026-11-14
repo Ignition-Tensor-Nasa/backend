@@ -37,6 +37,7 @@ def clear_caches():
     catalogue.load_catalogue.cache_clear()
     catalogue.load_datasets.cache_clear()
     catalogue.load_events.cache_clear()
+    catalogue.load_neighbors.cache_clear()
 
 
 @pytest.fixture
@@ -58,6 +59,9 @@ def client(tmp_path, monkeypatch):
     ]}), "utf-8")
     (tmp_path / "events.json").write_text(json.dumps({"method": "fixture", "events": {"T-001": [
         {"label": "Ignition", "time_s": 0.5, "dataset_id": "T-001-a", "source": "fixture.txt"}]}}), "utf-8")
+    (tmp_path / "neighbors.json").write_text(json.dumps({"metric": "fixture metric", "neighbors": {
+        "T-001": [{"case_id": "T-003", "distance": 0.5}, {"case_id": "T-002", "distance": 2.0},
+                  {"case_id": "T-gone", "distance": 3.0}]}}), "utf-8")
     monkeypatch.setattr(catalogue, "CURATED_DIR", tmp_path)
     clear_caches()
     yield TestClient(app)

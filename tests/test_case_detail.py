@@ -26,6 +26,19 @@ def test_events_are_source_logged_annotations_or_empty(client, tmp_path):
     assert client.get("/api/v1/cases/T-001").json()["events"] == []
 
 
+def test_neighbors_are_precomputed_summaries_with_the_metric(client, tmp_path):
+    body = client.get("/api/v1/cases/T-001/neighbors").json()
+    assert body["metric"] == "fixture metric"
+    assert [(item["case"]["case_id"], item["distance"]) for item in body["items"]] == [
+        ("T-003", 0.5), ("T-002", 2.0)]  # a neighbour missing from the catalogue is dropped
+    assert body["items"][0]["case"]["fuel"] == "ethylene"
+    assert client.get("/api/v1/cases/T-004/neighbors").json()["items"] == []
+    assert client.get("/api/v1/cases/T-999/neighbors").status_code == 404
+    (tmp_path / "neighbors.json").unlink()  # the artifact is optional
+    clear_caches()
+    assert client.get("/api/v1/cases/T-001/neighbors").json()["items"] == []
+
+
 def test_case_without_datasets_and_with_null_metadata(client):
     body = client.get("/api/v1/cases/T-005").json()
     assert body["datasets"] == [] and body["fuel"] is None and body["o2_pct"] is None

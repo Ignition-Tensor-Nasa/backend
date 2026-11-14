@@ -245,6 +245,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
 
 def prepare(data_dir: Path, out_dir: Path) -> None:
     from data_prep.flex import flex_cases  # needs openpyxl; imported late to avoid a cycle
+    from data_prep.similarity import METRIC, nearest_neighbours
 
     manifest = json.loads((Path(__file__).parent / "manifest.json").read_text("utf-8"))
     csv_dir = out_dir / "csv"
@@ -269,6 +270,8 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         json.dumps({"datasets": datasets}, ensure_ascii=False, indent=1), "utf-8")
     (out_dir / "events.json").write_text(json.dumps(
         {"method": EVENT_METHOD, "events": events}, ensure_ascii=False, indent=1), "utf-8")
+    (out_dir / "neighbors.json").write_text(json.dumps(
+        {"metric": METRIC, "neighbors": nearest_neighbours(catalogue)}, indent=1), "utf-8")
     size = sum(path.stat().st_size for path in csv_dir.iterdir()) / 1e6
     print(f"{catalogue.height} cases, {len(datasets)} datasets, {size:.1f} MB of CSV -> {out_dir}")
 
