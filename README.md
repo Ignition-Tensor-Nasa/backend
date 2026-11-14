@@ -57,3 +57,22 @@ curl http://127.0.0.1:8000/
 
 The response is `{"message":"Hello, world!"}`. Interactive API documentation is
 available at <http://127.0.0.1:8000/docs>.
+
+## Case search (B03)
+
+`POST /api/v1/cases/search` filters the curated case catalogue and returns
+`{ "items": CaseSummary[], "total": number }`, ordered by case ID.
+
+```sh
+curl -X POST http://127.0.0.1:8000/api/v1/cases/search \
+  -H 'Content-Type: application/json' \
+  -d '{"filters": {"fuel": ["methane"], "o2_pct": {"min": 21}}}'
+```
+
+The catalogue is read once from `data/catalogue.parquet` (override with
+`PSI_CATALOGUE_PATH`) and must have the columns `case_id`, `title`,
+`investigation`, `fuel`, `o2_pct`, `pressure_kpa`. It is produced by the B01
+data preparation; until it exists the endpoint answers 503. Invalid keys,
+categories or ranges answer 422.
+
+Tests (need `pytest` and `httpx`): `python3 -m pytest tests -q`
