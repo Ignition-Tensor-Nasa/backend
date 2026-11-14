@@ -28,4 +28,4 @@ def test_every_case_opens_its_measurements():
             assert response.status_code == 200
             lines = response.text.splitlines()
             assert lines[0].split(",") == keys
-            assert len(lines) > 1 and all(float(value) == float(value) for value in lines[1].split(","))
+            assert len(lines) > 1 and all(value == "" or float(value) == float(value) for value in lines[1].split(","))

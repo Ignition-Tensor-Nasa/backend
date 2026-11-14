@@ -59,6 +59,29 @@ def read_tsv(path: Path, time: str, columns: dict) -> pl.DataFrame:
     return frame
 
 
+def d2_fit(droplet: pl.DataFrame, t_min: float, t_max: float) -> tuple[pl.DataFrame, dict]:
+    """B12: D² history plus an ordinary least-squares line over t_min <= t <= t_max.
+
+    D² = DropletDiameter_mm squared. The classical D²-law reads D² = D0² - K·t, so the
+    burning-rate constant is K = -slope. The window is chosen by hand (manifest) to cover
+    the visually linear part; the line is exported only inside it. No uncertainty band.
+    """
+    data = droplet.select("time_s", (pl.col("DropletDiameter_mm") ** 2).alias("D2_mm2")).drop_nulls()
+    window = data.filter(pl.col("time_s").is_between(t_min, t_max))
+    if window.height < 10:
+        raise Skip("fewer than 10 samples in the D² fit window")
+    t, y = window["time_s"], window["D2_mm2"]
+    slope = ((t - t.mean()) * (y - y.mean())).sum() / ((t - t.mean()) ** 2).sum()
+    intercept = y.mean() - slope * t.mean()
+    residual = ((y - (intercept + slope * t)) ** 2).sum()
+    fit = {"k_mm2_s": round(-slope, 4), "intercept_mm2": round(intercept, 3),
+           "r2": round(1 - residual / ((y - y.mean()) ** 2).sum(), 4),
+           "n": window.height, "t_min_s": t_min, "t_max_s": t_max}
+    line = pl.when(pl.col("time_s").is_between(t_min, t_max)).then(
+        (intercept + slope * pl.col("time_s")).round(4))
+    return data.with_columns(line.alias("D2_fit_mm2")), fit
+
+
 def sheet_rows(path: Path) -> dict[str, dict]:
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
@@ -93,6 +116,16 @@ def flex_cases(data_dir: Path, entries: list[dict]):
                 exports.append((descriptor(
                     f"{test_id}-{kind.removesuffix('Data').lower()}", test_id, label, columns,
                     default_y, time_label="Time (source time base)"), frame))
+            fit = None
+            if "d2_fit" in entry:
+                window = entry["d2_fit"]
+                frame, fit = d2_fit(exports[0][1], window["t_min_s"], window["t_max_s"])
+                exports.append((descriptor(
+                    f"{test_id}-d2-fit", test_id,
+                    f"D² history with linear fit (K = {fit['k_mm2_s']} mm²/s)",
+                    {"D2_mm2": ("Droplet diameter squared", "mm²"),
+                     "D2_fit_mm2": ("Least-squares line (fit window only)", "mm²")},
+                    ["D2_mm2", "D2_fit_mm2"], time_label="Time (source time base)"), frame))
         except Skip as reason:
             print(f"SKIPPED {test_id}: {reason}")
             continue
@@ -116,6 +149,12 @@ def flex_cases(data_dir: Path, entries: list[dict]):
             f"YO2 = {pdf['yo2']}, D0 = {pdf['d0_mm']} mm, kavg = {pdf['kavg_mm2_s']} mm²/s.",
             None if o2_pct is not None else
             "The two sources disagree on oxygen, so the O₂ filter value is left unknown.",
+            fit and
+            f"D² fit made for this project (not a NASA value): least-squares line of D² "
+            f"against time over {fit['t_min_s']:g}-{fit['t_max_s']:g} s (hand-chosen linear "
+            f"part, {fit['n']} samples) gives K = {fit['k_mm2_s']} mm²/s, R² = {fit['r2']}. "
+            f"The summary PDF's kavg = {pdf['kavg_mm2_s']} mm²/s is computed by the source "
+            f"with a method that is not documented in the files used here.",
             "The pressure filter uses the Master Sheet's nominal value converted from atm. "
             "Each dataset keeps its own source time column; the source does not document "
             "how the time bases are synchronised. The wide-band radiometer values are large "

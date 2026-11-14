@@ -42,7 +42,7 @@
     {"test_id": "FLEX-1232", "summary_pdf": {"cir": "F095A09", "p_mmhg": 2257.447, "yo2": 0.17, "d0_mm": 4.337, "kavg_mm2_s": 0.324}},
     {"test_id": "FLEX-1238", "highlight": "Half-atmosphere droplet test.", "summary_pdf": {"cir": "F121A05", "p_mmhg": 387.279, "yo2": 0.21, "d0_mm": 4.463, "kavg_mm2_s": 0.369}},
     {"test_id": "FLEX-1240", "summary_pdf": {"cir": "F121A07", "p_mmhg": 387.496, "yo2": 0.21, "d0_mm": 4.081, "kavg_mm2_s": 0.351}},
-    {"test_id": "FLEX-1249", "summary_pdf": {"cir": "F125A02", "p_mmhg": 767.799, "yo2": 0.21, "d0_mm": 4.127, "kavg_mm2_s": 0.426}},
+    {"test_id": "FLEX-1249", "highlight": "Clean D²-law example: droplet diameter squared falls almost linearly with time (see the D² fit dataset).", "d2_fit": {"t_min_s": 4, "t_max_s": 36}, "summary_pdf": {"cir": "F125A02", "p_mmhg": 767.799, "yo2": 0.21, "d0_mm": 4.127, "kavg_mm2_s": 0.426}},
     {"test_id": "FLEX-1250", "summary_pdf": {"cir": "F125A03", "p_mmhg": 768.492, "yo2": 0.209, "d0_mm": 4.042, "kavg_mm2_s": 0.383}},
     {"test_id": "FLEX-1253", "summary_pdf": {"cir": "F125A07", "p_mmhg": 770.261, "yo2": 0.208, "d0_mm": 4.282, "kavg_mm2_s": 0.47}},
     {"test_id": "FLEX-1261", "highlight": "Highest-pressure droplet test in this selection (5 atm).", "summary_pdf": {"cir": "F135A05", "p_mmhg": 3777.606, "yo2": 0.21, "d0_mm": 5.646, "kavg_mm2_s": 0.618}},

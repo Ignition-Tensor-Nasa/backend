@@ -230,3 +230,18 @@ and `source` (the log file). The prepared artifact is `data/curated/events.json`
   detected or inferred here; blank log entries and cases without a log (all
   FLEX droplet cases) simply have no event, so there is no cross-run
   time-zero alignment.
+
+## Droplet D² fit (B12)
+
+One run, `FLEX-1249`, has an extra dataset `FLEX-1249-d2-fit` for a D²-law
+chart: `time_s`, `D2_mm2` (droplet diameter squared) and `D2_fit_mm2` (the
+fitted line, empty outside the fit window).
+
+- Transform: D² = `DropletDiameter_mm`².
+- Fit: ordinary least squares of D² against time over 4 to 36 s, a window
+  chosen by hand in the manifest to cover the visually linear part. The
+  burning-rate constant is K = minus the slope (D² = D0² - K·t).
+- Result on the source data: K = 0.417 mm²/s, R² = 0.9998. The NASA summary PDF
+  reports kavg = 0.426 mm²/s, computed by a method not documented in the
+  files used here, so the two are shown side by side, not equated.
+- No uncertainty band, no residual or predictive model, no fit for other runs.
