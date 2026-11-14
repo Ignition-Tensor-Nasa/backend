@@ -1,7 +1,7 @@
 """B06: translate a Polish/English description into the fixed filter state.
 
-The provider only proposes a filter state. It is validated with the same rules
-as manual search before it is returned; nothing the model writes is executed.
+Each description starts a new search. The provider only proposes a filter state;
+it is validated with the same rules as manual search before it is returned.
 """
 
 import json
@@ -39,22 +39,24 @@ Supported filters:
 - z_st: range of the stoichiometric mixture fraction Zst (0-1, no unit)
 
 Rules:
-- Return the complete new filter state. Start from the current filters and change only what \
-the user asks for; keep every unrelated constraint exactly as it is. Use null for a filter \
-that is not set, and for one the user explicitly asks to remove.
+- Treat each description as a new search. Start with no filters; do not reuse earlier filters. \
+Return the complete filter state described by this request, using null for unset filters.
+- Set searchable to true if the request specifies at least one supported filter, or explicitly \
+asks to show all cases without constraints. Set searchable to false if no supported search can \
+be made, and then set every filter to null and explain why in a warning.
 - A range needs at least one of min/max; use null for an open side.
 - Convert units when the user gives numbers: 1 psi = 6.894757293168 kPa, 1 atm = 101.325 kPa, \
 1 bar = 100 kPa, an oxygen fraction of 0.21 = 21.
 - Never invent a threshold. If the user is vague ("high oxygen", "low pressure") and gives no \
-number, leave that filter as it is and add a warning asking for a number.
+number, leave that filter unset and add a warning asking for a number.
 - If the user gives one approximate value ("about 34% oxygen"), use that value +/-2 for o2_pct \
 or +/-10% for pressure_kpa, and add a warning stating the range you used.
 - If the user asks for a fuel or investigation that is not in the valid values, or for \
 anything these filters cannot express (gravity, materials, outcomes, ...), do not guess: \
-leave the filters as they are and add a warning saying what is not available.
+leave unsupported filters unset and add a warning saying what is not available.
 - The known data bounds are only information; a range outside them is allowed.
-- Write warnings in the user's language, one short sentence each. No warning when the request \
-was applied exactly."""
+- Write every warning in English, regardless of the user's language, one short sentence each. \
+Keep catalogue names unchanged. No warning when the request was applied exactly."""
 
 
 def _nullable(schema: dict) -> dict:
@@ -77,9 +79,11 @@ def _schema(options: dict) -> dict:
         "properties": {
             "filters": {"type": "object", "properties": properties,
                         "required": list(properties), "additionalProperties": False},
-            "warnings": {"type": "array", "items": {"type": "string"}},
+            "warnings": {"type": "array", "items": {"type": "string"},
+                         "description": "Write all warnings in English, regardless of the user's language."},
+            "searchable": {"type": "boolean"},
         },
-        "required": ["filters", "warnings"], "additionalProperties": False,
+        "required": ["filters", "warnings", "searchable"], "additionalProperties": False,
     }
 
 
@@ -108,31 +112,32 @@ def _validated(raw) -> Filters:
     return filters
 
 
-def interpret(text: str, current: Filters) -> tuple[Filters, list[str], str]:
-    """(complete replacement filters, warnings, mode). Raises AIUnavailable."""
+def interpret(text: str) -> tuple[Filters, list[str], str, bool]:
+    """Return new filters, warnings, mode and whether the prompt is searchable."""
     mode = ai_settings().get("PSI_AI_MODE", "live").strip().lower()
     if mode not in ("live", "demo"):
         raise AIUnavailable("The AI assistant is not configured (set PSI_AI_MODE to live or demo).")
     if mode == "demo":
         reviewed = DEMO_PROMPTS.get(" ".join(text.casefold().replace("–", "-").split()).rstrip(".!?"))
         if reviewed is None:
-            return current, ["Demo mode: this prompt is not one of the rehearsed examples, "
-                             "so the filters were left unchanged."], mode
+            return Filters(), ["Demo mode: this prompt is not one of the rehearsed examples."], mode, False
         try:
-            return _validated(reviewed), [], mode
+            return _validated(reviewed), [], mode, True
         except ValueError:
-            return current, ["Demo mode: the rehearsed filters do not fit the current "
-                             "catalogue, so the filters were left unchanged."], mode
+            return Filters(), ["Demo mode: the rehearsed filters do not fit the current catalogue."], mode, False
     options = filter_options()
-    answer = ask_provider(text, current.model_dump(exclude_none=True), options)
+    answer = ask_provider(text, {}, options)
     try:
         # Structured-output support differs between models; never trust it alone.
         Draft202012Validator(_schema(options)).validate(answer)
         filters = _validated(answer["filters"])
         warnings = answer["warnings"]
+        searchable = answer["searchable"]
+        if not searchable and filters != Filters():
+            raise ValueError("an unsearchable response cannot contain filters")
     except (ValueError, KeyError, TypeError, SchemaValidationError):
         raise AIUnavailable("The AI provider proposed filters that are not valid; "
-                            "nothing was changed.") from None
-    if filters == current and not warnings:
-        warnings = ["No supported filter change was recognised in the description."]
-    return filters, warnings, mode
+                            "no search was applied.") from None
+    if not searchable and not warnings:
+        warnings = ["No supported search could be created from this prompt."]
+    return filters, warnings, mode, searchable

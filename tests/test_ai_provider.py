@@ -14,14 +14,15 @@ SECRET = "test-secret-must-not-appear"
 ANSWER = {
     "filters": {"investigation": None, "fuel": ["methane"],
                 "o2_pct": {"min": 30, "max": None}, "pressure_kpa": None, "z_st": None},
-    "warnings": ["A test warning."],
+    "warnings": ["A test warning."], "searchable": True,
 }
 
 
 @pytest.fixture(autouse=True)
 def clean_config(monkeypatch, tmp_path):
     monkeypatch.setattr(provider, "AI_CONFIG_PATH", tmp_path / ".env")
-    for name in ("PSI_AI_MODE", "PSI_AI_PROVIDER", "PSI_AI_MODEL", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
+    for name in ("PSI_AI_MODE", "PSI_AI_PROVIDER", "PSI_AI_MODEL", "PSI_AI_REASONING_EFFORT",
+                 "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -63,7 +64,7 @@ def test_context_and_schema_reach_selected_provider(client, monkeypatch, name):
                                       "current_filters": {"fuel": ["ethylene"], "pressure_kpa": {"min": 50}}})
     assert response.status_code == 200
     assert response.json() == {"filters": {"fuel": ["methane"], "o2_pct": {"min": 30.0}},
-                               "warnings": ["A test warning."], "mode": "live"}
+                               "warnings": ["A test warning."], "mode": "live", "searchable": True}
     if name == "anthropic":
         request = seen["request"]
         system = request["system"]
@@ -81,18 +82,66 @@ def test_context_and_schema_reach_selected_provider(client, monkeypatch, name):
         assert seen["headers"]["Authorization"] == f"Bearer {SECRET}"
         assert request["model"] == "example/model" and request["provider"] == {"require_parameters": True}
         assert request["response_format"]["json_schema"]["strict"] is True
+        assert "reasoning" not in request  # model default when not configured
     assert context == {
         "valid_values": {"investigation": ["INV-A", "INV-B"], "fuel": ["ethylene", "methane"]},
         "known_data_bounds": {"o2_pct": {"min": 21.0, "max": 40.0},
                               "pressure_kpa": {"min": 50.0, "max": 200.0},
                               "z_st": {"min": 0.1, "max": 0.3}},
-        "current_filters": {"fuel": ["ethylene"], "pressure_kpa": {"min": 50.0}},
+        "current_filters": {},
         "user_description": "methane above 30% oxygen",
     }
     for snippet in ("Supported filters:", "z_st", "1 psi = 6.894757293168 kPa", "1 atm = 101.325 kPa",
-                    "1 bar = 100 kPa", "0.21 = 21", "warning", "current filters"):
+                    "1 bar = 100 kPa", "0.21 = 21", "warning", "new search"):
         assert snippet in system
     assert schema == ai._schema({**context["valid_values"], **context["known_data_bounds"]})
+
+
+@pytest.mark.parametrize("name", ["anthropic", "openrouter"])
+@pytest.mark.parametrize("text", ["Pokaż testy z wysokim ciśnieniem", "Show tests with high pressure"])
+def test_warning_language_instruction_is_english_for_either_input_language(client, monkeypatch, name, text):
+    configure(monkeypatch, name)
+    answer = {"filters": {"investigation": None, "fuel": None, "o2_pct": None,
+                          "pressure_kpa": None, "z_st": None},
+              "warnings": ["Please provide a pressure value."], "searchable": False}
+    seen = mock_provider(monkeypatch, name, answer)
+    response = client.post(URL, json={"text": text})
+    assert response.status_code == 200
+    assert response.json()["warnings"] == ["Please provide a pressure value."]
+    if name == "anthropic":
+        request = seen["request"]
+        system = request["system"]
+        user = request["messages"][0]["content"]
+        schema = request["output_config"]["format"]["schema"]
+    else:
+        request = seen["json"]
+        system = request["messages"][0]["content"]
+        user = request["messages"][1]["content"]
+        schema = request["response_format"]["json_schema"]["schema"]
+    assert json.loads(user)["user_description"] == text
+    assert "Write every warning in English, regardless of the user's language" in system
+    assert "all warnings in English" in schema["properties"]["warnings"]["description"]
+
+
+def test_openrouter_reasoning_effort_from_dotenv(client, monkeypatch):
+    provider.AI_CONFIG_PATH.write_text(
+        f"PSI_AI_PROVIDER=openrouter\nPSI_AI_MODEL=anthropic/claude-haiku-5.5\n"
+        f"OPENROUTER_API_KEY={SECRET}\nPSI_AI_REASONING_EFFORT=high\n", encoding="utf-8")
+    seen = mock_provider(monkeypatch, "openrouter")
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 200
+    assert seen["json"]["model"] == "anthropic/claude-haiku-5.5"
+    assert seen["json"]["reasoning"] == {"effort": "high", "exclude": True}
+
+
+def test_invalid_reasoning_effort_is_reported_without_network(client, monkeypatch):
+    configure(monkeypatch, "openrouter")
+    monkeypatch.setenv("PSI_AI_REASONING_EFFORT", SECRET)
+    monkeypatch.setattr(provider.httpx, "post", lambda *args, **kwargs: pytest.fail("provider must not be called"))
+    response = client.post(URL, json={"text": "anything"})
+    assert response.status_code == 503 and "PSI_AI_REASONING_EFFORT" in response.json()["detail"]
+    assert SECRET not in response.text
+    assert client.post("/api/v1/cases/search", json={"filters": {}}).status_code == 200
 
 
 @pytest.mark.parametrize("name", ["anthropic", "openrouter"])
@@ -251,7 +300,8 @@ def test_dotenv_can_enable_demo_without_credentials(client, monkeypatch):
     monkeypatch.setattr(ai, "ask_provider", lambda *args: pytest.fail("provider must not be called"))
     response = client.post(URL, json={"text": "not rehearsed", "current_filters": {"fuel": ["methane"]}})
     assert response.status_code == 200
-    assert response.json()["mode"] == "demo" and response.json()["filters"] == {"fuel": ["methane"]}
+    assert response.json()["mode"] == "demo" and response.json()["filters"] == {}
+    assert response.json()["searchable"] is False
 
 
 def test_malformed_dotenv_is_sanitized_and_manual_search_works(client, caplog):

@@ -214,10 +214,15 @@ curl -OJ http://127.0.0.1:8000/api/v1/datasets/CFIG-21291C1-sensors/csv
 
 ## Describe a scenario (B06)
 
-`POST /api/v1/filters/interpret` with `{"text": "...", "current_filters": {...}}`
-returns `{"filters": Filters, "warnings": string[], "mode": "live" | "demo"}`.
-`filters` is the complete replacement state, ready to send to the search
-endpoint. `text` is trimmed, 1 to 4000 characters.
+`POST /api/v1/filters/interpret` with `{"text": "..."}` returns
+`{"filters": Filters, "warnings": string[], "mode": "live" | "demo", "searchable": boolean}`.
+Every prompt starts with no filters; previous searches are not reused. The legacy
+`current_filters` field is accepted for compatibility but ignored. If `searchable`
+is true, send `filters` to the search endpoint; a valid search for all cases can
+have empty filters. If it is false, show the warning and no results: do **not**
+search the empty filters, which would otherwise return the entire catalogue.
+`text` is trimmed, 1 to 4000 characters. Warnings are requested in English even
+when the description is in Polish.
 
 - **live** (default): one call to the selected Anthropic or OpenRouter model,
   with a JSON schema limited to the catalogue's categories. The full response
@@ -225,8 +230,8 @@ endpoint. `text` is trimmed, 1 to 4000 characters.
   invalid or invented output answers 503 and changes nothing.
 - **demo** (`PSI_AI_MODE=demo`): no network. Only the rehearsed prompts in
   `app/ai/interpret.py` (`DEMO_PROMPTS`) return reviewed filter states, always
-  labelled `"mode": "demo"`; any other prompt returns the filters unchanged
-  plus a warning. A failed live call is never replaced by a demo answer.
+  labelled `"mode": "demo"`; any other prompt returns `searchable: false` with
+  a warning. A failed live call is never replaced by a demo answer.
 
 Any assistant failure answers 503 with a readable `detail`; manual search keeps
 working. Configuration errors, request failures and incomplete responses do not
@@ -276,11 +281,18 @@ switching. Anthropic's existing API-side refusal fallback to its default
 fallback model remains enabled; this is not a demo response.
 
 Each live request sends the supported-filter and unit rules, catalogue values
-and bounds, current filters, and user description to the selected provider.
+and bounds, an empty starting filter state, and user description to the selected provider.
 OpenRouter may route the request to the chosen model's upstream provider. Review
 their privacy and pricing terms before enabling live mode. Keys are not returned
 to clients or logged by this backend; errors do not include provider response
 bodies or exception messages.
+
+For OpenRouter models that support reasoning effort, optionally set
+`PSI_AI_REASONING_EFFORT` to `none`, `minimal`, `low`, `medium`, `high`,
+`xhigh`, or `max`. Supported levels depend on the model. If omitted, OpenRouter
+uses the model's default. Reasoning tokens may increase latency and cost.
+This setting applies to OpenRouter only; the Anthropic adapter continues to use
+the effort specified by the calling tool.
 
 For a network-free rehearsal, use `PSI_AI_MODE=demo`; no model or key is needed.
 The provider interface is independent of interpretation, so other adapters can
