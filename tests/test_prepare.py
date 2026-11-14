@@ -86,3 +86,82 @@ def test_two_pass_vocabulary_proposal_classification_and_comparison():
     changed = pl.DataFrame([row | {"fuel": None}, row | {"case_id": "b"}])
     assert two_pass.differences(same, changed) == [
         "b: only in curated output", "a.fuel: two-pass 'dodecane' != curated None"]
+
+
+def test_acme_conversions_follow_the_nasa_formulas(tmp_path):
+    from data_prep.prepare import acme_scales, convert_acme
+
+    recording = tmp_path / "x_data.csv"
+    recording.write_text("2021-01-01 1 00:00:00:000 ,MFCA1 Full Scale: 20.000000,MFCA3 Full Scale: 0.500000\n")
+    scales = acme_scales(recording)
+    assert scales == {"MFCA1": 20.0, "MFCA3": 0.5}
+    frame = pl.DataFrame({"PTA3": [0.5, 1.32], "MFCA1StaticMixerFlow": [2.5, 5.0],
+                          "MFCA3FuelFlow": [1.0, 5.0], "MFCA2BypassFlow": [1.0, 1.0], "PMT1": [1.0, 2.0]})
+    out = convert_acme(frame, scales)
+    assert out["PTA3"].to_list() == pytest.approx([0.0, (1.32 - 0.5) * 36.2595 * 6.894757293168 * 1 / 1.0], rel=1e-3)
+    assert out["PTA3"][1] == pytest.approx(205.0, abs=0.5)  # 29.7 psia
+    assert out["MFCA1StaticMixerFlow"].to_list() == [10.0, 20.0]
+    assert out["MFCA3FuelFlow"].to_list() == [0.1, 0.5]
+    assert out["MFCA2BypassFlow"].to_list() == [1.0, 1.0]  # no scale in the header: left untouched
+    assert out["PMT1"].to_list() == [1.0, 2.0]
+
+
+def test_flame_design_channel_sets_and_explanation(tmp_path):
+    from data_prep import flame_design
+
+    standard = tmp_path / "a.csv"
+    standard.write_text("pre\nTime,PTA1,RadiometerCenter,RadiometerOffset\n")
+    later = tmp_path / "b.csv"
+    later.write_text("pre\nTime,PTA1,Radiometer3+30LoGain\n")
+    assert flame_design.channels_for(standard)[1][0] == "RadiometerCenter"
+    assert flame_design.channels_for(later)[1][0] == "Radiometer3+30LoGain"
+    row = {"Fuel": "C2H4", "Tad (K)": "2352.14"}
+    assert flame_design.explain(row, "ethylene", 20.7, 103.2) == (
+        "Normal (fuel-inside) flame test with ethylene in 20.7% oxygen and about 103 kPa. "
+        "The table gives an adiabatic flame temperature of 2352 K.")
+    assert flame_design.explain({"Fuel": "C3H8", "Tad (K)": "RAMPED"}, None, None, None) == (
+        "Normal (fuel-inside) flame test with C3H8.")
+
+
+def test_efield_sweep_log_window_and_field_response(tmp_path):
+    from data_prep import efield
+
+    sweep = tmp_path / "x_VoltageSweep.txt"
+    sweep.write_text("testpointName:18073A3,\nefieldMinVoltage:-8000,\nefieldMaxVoltage:-500,\nconcentrationInitial:0.8,\n")
+    assert efield.sweep_parameters(sweep) == {"efieldMinVoltage": -8000.0, "efieldMaxVoltage": -500.0,
+                                              "concentrationInitial": 0.8}
+    assert efield.sweep_parameters(tmp_path / "absent.txt") == {}
+    log = tmp_path / "x_TP.txt"
+    log.write_text("Ignition and retraction: ***\nFlame stabilization #1: 2018-10-17 20:50:09\n"
+                   "MFCs off: 2018-10-17 20:51:29\n")
+    start, end = efield.flame_window(log)
+    assert end - start == 80
+    frame = pl.DataFrame({"time_s": [float(t) for t in range(0, 400)],
+                          "EfieldVoltage": [-(t % 5) * 1.0 for t in range(400)],
+                          "IonCurrent": [0.1 * (t % 5) for t in range(400)]})
+    response = efield.field_response(frame, start - 10, (start, start + 300))
+    assert response.columns == ["time_s", "ion_mean", "ion_min", "ion_max", "n"]
+    assert response["time_s"].to_list() == [-4.0, -3.0, -2.0, -1.0, 0.0]  # x is the field in kV
+    assert response["n"].sum() == 301 - 0  # every sample inside the window
+    assert efield.field_response(frame, 0.0, None) is None
+
+
+def test_same_recording_drops_repeated_headers_and_flags_heating(tmp_path):
+    from data_prep import same
+
+    columns = ["Time", "HeatingInProgress", *same.CHANNELS, "SampleSidePressure[AT20](PSIA)"]
+    rows = [",".join(columns)]
+    for t in range(60):
+        values = [str(1000 + t), "1" if 10 <= t <= 19 else "0"] + ["0.5"] * len(same.CHANNELS) + ["14.9"]
+        rows.append(",".join(values))
+        if t == 30:
+            rows.append(",".join(columns))  # a repeated header row inside the file
+    path = tmp_path / "HKPData_gmt1_1.csv"
+    path.write_text("\n".join(rows) + "\n")
+    frame, facts = same.read_recording(path)
+    assert frame.height == 60 and frame["time_s"][0] == 0.0 and frame["time_s"][-1] == 59.0
+    assert facts["heating"] == (10.0, 19.0) and facts["pressure"] == 14.9
+    short = tmp_path / "HKPData_gmt2_1.csv"
+    short.write_text("\n".join(rows[:10]) + "\n")
+    with pytest.raises(Skip):
+        same.read_recording(short)

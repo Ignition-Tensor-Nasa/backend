@@ -116,7 +116,10 @@ if __name__ == "__main__":
         curated_path = args.out_dir / "catalogue.parquet"
         if not curated_path.is_file():
             raise SystemExit(f"{result.height} cases classified; no curated catalogue to compare with.")
-        problems = differences(result, pl.read_parquet(curated_path))
+        curated = pl.read_parquet(curated_path)
+        # Only the investigations this script classifies are compared (not Flame Design etc.).
+        curated = curated.filter(pl.col("investigation").is_in(result["investigation"].unique().to_list()))
+        problems = differences(result, curated)
         print("\n".join(problems))
         print(f"{result.height} cases classified; reproduces the curated slice: {'no' if problems else 'yes'}")
         raise SystemExit(1 if problems else 0)

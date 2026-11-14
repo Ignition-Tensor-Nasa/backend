@@ -22,32 +22,58 @@ BAR_TO_KPA = 100.0
 
 # Raw column -> label. Units are null: the source files do not state them
 # (signals look like raw volts, which is not verified), so nothing is converted.
-CHANNELS = {
-    "MFCA1StaticMixerFlow": "MFC A1 static mixer flow (raw)",
-    "MFCA2BypassFlow": "MFC A2 bypass flow (raw)",
-    "MFCA3FuelFlow": "MFC A3 fuel flow (raw)",
-    "IonCurrent": "Ion current (raw)",
-    "PTA1": "Pressure transducer PTA1 (raw)",
-    "PTA2": "Pressure transducer PTA2 (raw)",
-    "PTA3": "Pressure transducer PTA3 (raw)",
-    "PMT1": "Photomultiplier PMT1 (raw)",
-    "PMT2": "Photomultiplier PMT2 (raw)",
-    "PMT3": "Photomultiplier PMT3 (raw)",
-    "TCA": "Thermocouple TCA (raw)",
-    "TCB": "Thermocouple TCB (raw)",
-    "TCC": "Thermocouple TCC (raw)",
-    "TCD": "Thermocouple TCD (raw)",
-    "TCBurner": "Burner thermocouple (raw)",
-    "Radiometer3+60LoGain": "Radiometer +60, low gain (raw)",
-    "Radiometer3+30LoGain": "Radiometer +30, low gain (raw)",
-    "Radiometer3-10LoGain": "Radiometer -10, low gain (raw)",
-    "RadiometerOffset": "Offset radiometer (raw)",
+# Raw column -> (label, unit). Pressure and flow are converted with the formulas of NASA's
+# "ACME non-imaging data file description" (see convert_acme); the other channels keep the
+# raw recorded values and have no stated unit.
+CHANNEL_INFO = {
+    "MFCA1StaticMixerFlow": ("MFC A1 static mixer (oxidizer) flow", "SLPM"),
+    "MFCA2BypassFlow": ("MFC A2 bypass (inert) flow", "SLPM"),
+    "MFCA3FuelFlow": ("MFC A3 fuel flow", "SLPM"),
+    "IonCurrent": ("Ion current signal (raw voltage)", "V"),
+    "PTA1": ("Outer coflow pressure (PTA1)", "kPa"),
+    "PTA2": ("Inner coflow / burner pressure (PTA2)", "kPa"),
+    "PTA3": ("Chamber pressure (PTA3)", "kPa"),
+    "PMT1": ("Photomultiplier PMT1 current (310 nm band)", "µA"),
+    "PMT2": ("Photomultiplier PMT2 current (broadband, neutral density)", "µA"),
+    "PMT3": ("Photomultiplier PMT3 current (430 nm band)", "µA"),
+    "TCA": ("Thermocouple TCA (raw)", None),
+    "TCB": ("Thermocouple TCB (raw)", None),
+    "TCC": ("Thermocouple TCC (raw)", None),
+    "TCD": ("Thermocouple TCD (raw)", None),
+    "TCBurner": ("Burner thermocouple (raw)", None),
+    "Radiometer3+60LoGain": ("Radiometer +60, low gain (raw)", None),
+    "Radiometer3+30LoGain": ("Radiometer +30, low gain (raw)", None),
+    "Radiometer3-10LoGain": ("Radiometer -10, low gain (raw)", None),
+    "RadiometerOffset": ("Offset radiometer (raw)", None),
 }
+CHANNELS = {key: label for key, (label, _) in CHANNEL_INFO.items()}
+PSI_TO_KPA = 6.894757293168
+FLOWS = {"MFCA1StaticMixerFlow": "MFCA1", "MFCA2BypassFlow": "MFCA2", "MFCA3FuelFlow": "MFCA3"}
+
+
+def acme_scales(path: Path) -> dict[str, float]:
+    """MFC full-scale flows (SLPM) from the first line of a raw ACME recording."""
+    first = path.read_bytes().split(b"\n", 1)[0].decode("utf-8", errors="replace")
+    return {name: float(value) for name, value in re.findall(r"(MFCA\d) Full Scale: ([\d.]+)", first)}
+
+
+def convert_acme(frame: pl.DataFrame, scales: dict[str, float]) -> pl.DataFrame:
+    """Pressure to kPa and flows to SLPM, as in NASA's ACME non-imaging data file description:
+    psia = (V - 0.5) * 14.5038 * 10 / 4;  SLPM = V / 5 * full scale. Missing scales skip a flow."""
+    exprs = [((pl.col(key) - 0.5) * 14.5038 * 10 / 4 * PSI_TO_KPA).alias(key)
+             for key in ("PTA1", "PTA2", "PTA3") if key in frame.columns]
+    exprs += [(pl.col(key) / 5 * scales[mfc]).alias(key)
+              for key, mfc in FLOWS.items() if key in frame.columns and mfc in scales]
+    return frame.with_columns(exprs)
+
+
 SETPOINTS = {f"MFCA{n}Setpoint(V)": f"MFC A{n} setpoint" for n in (1, 2, 3)}
 SENSOR_NOTE = (
-    "Full raw recording, every sample kept (documented rate 125 Hz); no sampling or "
-    "interpolation. Channel units are not stated in the source files, so values are "
-    "unconverted. time_s counts from the first sample."
+    "Full recording, every sample kept (documented rate 125 Hz); no sampling or interpolation. "
+    "Pressures (kPa), MFC flows (SLPM at the device's full scale) and PMT currents (µA) use the "
+    "conversions in NASA's ACME non-imaging data file description; ion current is the signal "
+    "voltage. Thermocouple and radiometer channels keep the raw recorded values because the "
+    "source files state no unit. time_s counts from the first sample."
 )
 SETPOINT_NOTE = (
     "Commanded setpoint log as recorded; entries with the same timestamp are in the source. "
@@ -91,7 +117,12 @@ def read_series(path: Path, test_id: str, wanted: dict,
     found = re.search(r"Test Point:\s*([^,]+)", preamble)
     if not found or found.group(1).strip() != test_id:
         raise Skip(f"{path.name}: preamble does not name test point {test_id}")
-    raw = pl.read_csv(content, skip_rows=1, schema_overrides={"Time": pl.String})
+    try:
+        # A recording cut off mid-line leaves a short last row: keep the complete columns.
+        raw = pl.read_csv(content, skip_rows=1, schema_overrides={"Time": pl.String},
+                          truncate_ragged_lines=True)
+    except pl.exceptions.ComputeError as error:
+        raise Skip(f"{path.name}: unparsable recording ({str(error).splitlines()[0][:80]})") from error
     missing = [name for name in ("Time", *wanted) if name not in raw.columns]
     if missing:
         raise Skip(f"{path.name}: missing columns {missing}")
@@ -251,10 +282,12 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
             # A second recording (e.g. *_data2.csv) makes the link ambiguous.
             if len(list((family / "csv").glob(prefix + "data*.csv"))) != 1:
                 raise Skip("not exactly one *_data.csv recording")
-            data, start = read_series(family / "csv" / (prefix + "data.csv"), test_id, CHANNELS)
+            data_path = family / "csv" / (prefix + "data.csv")
+            data, start = read_series(data_path, test_id, CHANNELS)
+            data = convert_acme(data, acme_scales(data_path))
             exports = [(descriptor(
-                f"{case_id}-sensors", case_id, "Sensor recording (raw channels)",
-                {key: (label, None) for key, label in CHANNELS.items()},
+                f"{case_id}-sensors", case_id, "Sensor recording (converted where documented)",
+                dict(CHANNEL_INFO),
                 ["Radiometer3+30LoGain", "PMT1", "MFCA3FuelFlow"], SENSOR_NOTE), data)]
             try:
                 setpoints, _ = read_series(
@@ -297,17 +330,26 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
 
 
 def prepare(data_dir: Path, out_dir: Path) -> None:
+    from data_prep.efield import efield_cases
+    from data_prep.flame_design import flame_design_cases
+    from data_prep.same import same_cases
+    from data_prep.saffire import saffire_cases
     from data_prep.flex import flex_cases  # needs openpyxl; imported late to avoid a cycle
     from data_prep.similarity import METRIC, nearest_neighbours
 
     manifest = json.loads((Path(__file__).parent / "manifest.json").read_text("utf-8"))
+    more = json.loads((Path(__file__).parent / "manifest_projects.json").read_text("utf-8"))
     shutil.rmtree(out_dir / "csv", ignore_errors=True)  # output of earlier versions
     parquet_dir = out_dir / "parquet"
     shutil.rmtree(parquet_dir, ignore_errors=True)
     parquet_dir.mkdir(parents=True)
     cases, datasets, events = [], [], {}
     for case, exports in (*cfig_cases(data_dir, manifest["cases"]),
-                          *flex_cases(data_dir, manifest.get("flex_cases", []))):
+                          *flex_cases(data_dir, manifest.get("flex_cases", [])),
+                          *flame_design_cases(data_dir, more.get("flame_design", [])),
+                          *saffire_cases(data_dir, more.get("saffire", [])),
+                          *efield_cases(data_dir, more.get("efield", [])),
+                          *same_cases(data_dir, more.get("same_r", []))):
         for meta, frame in exports:
             assert frame.columns == [column["key"] for column in meta["columns"]]
             frame.write_parquet(parquet_dir / meta["file"])
@@ -326,6 +368,14 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         {"method": EVENT_METHOD, "events": events}, ensure_ascii=False, indent=1), "utf-8")
     (out_dir / "neighbors.json").write_text(json.dumps(
         {"metric": METRIC, "neighbors": nearest_neighbours(catalogue)}, indent=1), "utf-8")
+    registry = json.loads((Path(__file__).parent / "projects.json").read_text("utf-8"))
+    present = set(catalogue["investigation"])
+    shown = [p for p in registry["projects"] if present & set(p["investigations"])]
+    for project in registry["projects"]:
+        if project not in shown:
+            print(f"Project {project['project_id']} has no prepared cases and is not published.")
+    (out_dir / "projects.json").write_text(
+        json.dumps({"projects": shown}, ensure_ascii=False, indent=1), "utf-8")
     context = json.loads((Path(__file__).parent / "research_context.json").read_text("utf-8"))
     for name, item in context["investigations"].items():
         allowed = set(item["tags"]) <= {"prevention", "detection", "suppression", "unknown"}

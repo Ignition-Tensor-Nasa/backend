@@ -18,7 +18,7 @@ def test_every_case_opens_its_measurements():
     assert items
     options = client.get("/api/v1/filters").json()
     for item in items:
-        assert item["fuel"] in options["fuel"]
+        assert item["fuel"] is None or item["fuel"] in options["fuel"]
         detail = client.get(f"/api/v1/cases/{item['case_id']}").json()
         assert detail["datasets"] and detail["source_label"] and detail["note"]
         for dataset in detail["datasets"]:

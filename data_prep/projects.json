@@ -1,0 +1,79 @@
+{
+ "_comment": "Registry of the projects shown on the start screen. 'investigations' must match catalogue values. Texts describe what the source documents state; no results are claimed here.",
+ "projects": [
+  {
+   "project_id": "acme-cfi-g",
+   "title": "ACME CFI-G: cool flames in gases",
+   "order": 1,
+   "mission": "ACME, Combustion Integrated Rack-free chamber on the ISS",
+   "summary": "Spherical gas flames of ethane, propane and butane burned in microgravity at different oxygen levels and pressures. Some runs show cool flames, a faint low-temperature burning that can persist after the hot flame goes out.",
+   "measures": "Radiometers, photomultipliers (flame light), thermocouples, gas flows and chamber pressure at 125 Hz.",
+   "source": "NASA PSI-159",
+   "investigations": [
+    "ACME CFI-G"
+   ]
+  },
+  {
+   "project_id": "cfi-flex",
+   "title": "CFI / FLEX: burning fuel droplets",
+   "order": 2,
+   "mission": "Flame Extinguishment Experiment on the ISS Combustion Integrated Rack",
+   "summary": "Single dodecane droplets burned in microgravity. The droplet shrinks as D² falls roughly linearly in time; some runs also show a cool flame around the droplet.",
+   "measures": "Droplet diameter, cool-flame diameter and radiometer power over time.",
+   "source": "NASA PSI-39",
+   "investigations": [
+    "CFI (FLEX)"
+   ]
+  },
+  {
+   "project_id": "flame-design",
+   "title": "Flame Design: shaping flames",
+   "order": 3,
+   "mission": "ACME on the ISS",
+   "summary": "Ethylene and other fuel flames on a spherical burner, normal and inverse, at about one atmosphere. Tabulated fuel fraction, adiabatic flame temperature and mixture fraction accompany each run.",
+   "measures": "The same 125 Hz ACME channels as CFI-G, plus tabulated flame conditions.",
+   "source": "NASA PSI-10",
+   "investigations": [
+    "ACME Flame Design"
+   ]
+  },
+  {
+   "project_id": "saffire-iii",
+   "title": "Saffire-III: a fire aboard a spacecraft",
+   "order": 4,
+   "mission": "Spacecraft Fire Safety Demonstration, Cygnus cargo vehicle",
+   "summary": "A fire lit on purpose in a 0.4 m x 0.94 m SIBAL fabric sample inside a Cygnus vehicle after it left the ISS. The sensors show temperature, radiant heat, oxygen and CO2 through the burn, and the vehicle's own smoke detector shows what a spacecraft would notice.",
+   "measures": "Thermocouples, radiometers, gas composition, air flow and pressure at 30 Hz, plus 1 Hz telemetry with the Cygnus smoke detector.",
+   "source": "NASA PSI-100",
+   "investigations": [
+    "Saffire-III"
+   ],
+   "ignition_label": "Igniter on"
+  },
+  {
+   "project_id": "e-field-flames",
+   "title": "E-FIELD Flames: steering flames with electricity",
+   "order": 5,
+   "mission": "ACME on the ISS (Prof. D. Dunn-Rankin, UC Irvine)",
+   "summary": "Methane and ethylene diffusion flames in microgravity with up to ±10 kV applied between a mesh and the burner. The flame's ion current and shape respond to the field strength and polarity.",
+   "measures": "Mesh voltage, ion current, flame light (PMTs), thermocouples, gas flows and pressure at 125 Hz.",
+   "source": "NASA PSI-22",
+   "investigations": [
+    "ACME E-FIELD Flames"
+   ]
+  },
+  {
+   "project_id": "same-r",
+   "title": "SAME-R: smoke from spacecraft materials",
+   "order": 6,
+   "mission": "Smoke Aerosol Measurement Experiment (reflight), ISS",
+   "summary": "Samples of spacecraft materials such as Kapton, Teflon, silicone, lampwick and Pyrell are heated until they smoke, and smoke detectors and particle counters record the result in microgravity.",
+   "measures": "ISS and shuttle smoke detectors, ionization detectors, particle counts, plume temperature and flow at about 1 Hz.",
+   "source": "NASA PSI-101",
+   "investigations": [
+    "SAME-R"
+   ],
+   "ignition_label": "Sample heating on"
+  }
+ ]
+}

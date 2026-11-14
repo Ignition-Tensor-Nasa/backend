@@ -20,12 +20,58 @@
     }
    ]
   },
+  "ACME Flame Design": {
+   "tags": [
+    "unknown"
+   ],
+   "rationale": "The documents shipped with PSI-10 describe the hardware and operations; no statement tying Flame Design to fire prevention, detection or suppression was found in them.",
+   "evidence": []
+  },
   "ACME CFI-G": {
    "tags": [
     "unknown"
    ],
    "rationale": "The documents shipped with PSI-159 (engineering implementation report, daily logs) describe hardware and operations; no statement tying CFI-G to fire prevention, detection or suppression was found in them.",
    "evidence": []
+  },
+  "Saffire-III": {
+   "tags": [
+    "prevention",
+    "detection"
+   ],
+   "rationale": "The project description frames Saffire as the basis for spacecraft fire prevention and response, and its objectives table lists fire-detection evaluation. Both are objectives of the Spacecraft Fire Safety Demonstration project as a whole, not results shown here.",
+   "evidence": [
+    {
+     "document": "SAFFIRE-III_PSI-100/pdf/SAFFIRE Objectives, Development and Status.pdf",
+     "page": 1,
+     "quote": "development of an approach to spacecraft fire prevention and response"
+    },
+    {
+     "document": "SAFFIRE-III_PSI-100/pdf/SAFFIRE Objectives, Development and Status.pdf",
+     "page": 5,
+     "quote": "Evaluate performance of hybrid fire detection"
+    }
+   ]
+  },
+  "ACME E-FIELD Flames": {
+   "tags": [
+    "unknown"
+   ],
+   "rationale": "The documents shipped with PSI-22 describe the electric-field science and operations; no statement tying the experiment to fire prevention, detection or suppression was reviewed.",
+   "evidence": []
+  },
+  "SAME-R": {
+   "tags": [
+    "detection"
+   ],
+   "rationale": "The experiment's stated purpose is measuring smoke from spacecraft materials to improve spacecraft smoke detectors.",
+   "evidence": [
+    {
+     "document": "SAME-R_PSI-101/pdf/SAME Benefits.pdf",
+     "page": 1,
+     "quote": "The limited options available to respond to a spacecraft fire increase the importance of early detection."
+    }
+   ]
   }
  }
 }

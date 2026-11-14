@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 
 from app.main import app
-from app.services import catalogue
+from app.services import catalogue, projects
 
 ROWS = [
     # case_id, investigation, fuel, o2_pct, pressure_kpa
@@ -41,6 +41,7 @@ def clear_caches():
     catalogue.load_neighbors.cache_clear()
     catalogue.load_context.cache_clear()
     catalogue.dataset_data_json.cache_clear()
+    projects.load_projects.cache_clear()
 
 
 @pytest.fixture
@@ -68,6 +69,11 @@ def client(tmp_path, monkeypatch):
     (tmp_path / "context.json").write_text(json.dumps({"disclaimer": "grouping only", "investigations": {
         "INV-A": {"tags": ["suppression"], "rationale": "fixture", "evidence": [
             {"document": "fixture.pdf", "page": 2, "quote": "fixture quote"}]}}}), "utf-8")
+    (tmp_path / "projects.json").write_text(json.dumps({"projects": [
+        {"project_id": "proj-a", "title": "Project A", "order": 1, "mission": "M", "summary": "S",
+         "measures": "X", "source": "src", "investigations": ["INV-A"]},
+        {"project_id": "proj-b", "title": "Project B", "order": 2, "mission": "M", "summary": "S",
+         "measures": "X", "source": "src", "investigations": ["INV-B"]}]}), "utf-8")
     (tmp_path / "neighbors.json").write_text(json.dumps({"metric": "fixture metric", "neighbors": {
         "T-001": [{"case_id": "T-003", "distance": 0.5}, {"case_id": "T-002", "distance": 2.0},
                   {"case_id": "T-gone", "distance": 3.0}]}}), "utf-8")

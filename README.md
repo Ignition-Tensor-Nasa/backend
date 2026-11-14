@@ -101,6 +101,14 @@ What is and is not verified:
 - Only ACME CFI-G normal flames are curated, so `o2_pct` always means the
   chamber O₂ mole fraction before the test. `pressure_kpa` is the table's
   approximate pressure, bar × 100.
+- Sensor units: pressure (PTA1-3, kPa), MFC flow (SLPM, at the device's full
+  scale from the file header) and PMT current (µA) are converted with the
+  formulas in NASA's "ACME non-imaging data file description"
+  (`ACME-E-FIELD-Flames_PSI-22/pdf`); the ion-current channel is the signal
+  voltage. Thermocouple and radiometer channels stay raw (unit `null`): the
+  conversions depend on hardware (array type, calibration) that the files do
+  not identify. The chamber pressure from PTA3 can differ a few percent from
+  the table's "approximate pressure".
 - `time_s` is seconds since the first sensor sample (both datasets of a case
   share that zero). Source timestamps can jitter by a few milliseconds (one
   known 2 ms backward step in 21174F1); the API returns rows ordered by time. Sensor channels keep their raw recorded values with a null
@@ -446,3 +454,114 @@ does not use `PSI_AI_MODE=demo`.
 This script has not been run against the live API in this repository (no key
 on the build machine); its evidence checks are tested with a stubbed model and
 on real PDF text.
+
+## Projects (missions) and multi-run charts
+
+The start screen is meant to list **projects**, and each project opens views
+that compare many runs. The registry is `data_prep/projects.json`; the
+preparation script publishes only projects that have prepared cases.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/v1/projects` | `ProjectSummary[]`: `project_id`, `title`, `mission`, `summary`, `measures`, `source`, `case_count`, `fuels` |
+| `GET /api/v1/projects/{id}` | the summary plus `filters` (options inside the project) and `views` |
+| `POST /api/v1/projects/{id}/cases/search` | same body and answer as case search, restricted to the project (a filter cannot widen it) |
+| `POST /api/v1/projects/{id}/overlay` | many runs of one channel on one axis |
+
+`views[]` lists the dataset kinds the project has (`sensors`, `droplet`, ...)
+with their `channels` (`key`, `label`, `unit`) and a default selection, so the
+frontend can build its chart pickers without hard-coding anything.
+
+`overlay` request: `{"kind": "sensors", "channel": "PMT1", "filters": {...},
+"align": "start" | "ignition", "max_series": 40, "max_points": 1500}`.
+Response: `channel`, `x` (axis label/unit/align), `matched`, `series[]` (case
+summary fields plus `n_source`, `sampled`, `points: [[x, y|null], ...]`) and a
+`note` stating the sampling method.
+
+- Each curve is a min/max envelope of at most `max_points` samples (peaks and
+  both ends kept); `n_source` is the full count. No smoothing or interpolation.
+- `align: "ignition"` shifts each run so t = 0 is the "Ignition and retraction"
+  entry of its test-point log. Runs without a logged ignition are left out and
+  counted in the note; nothing is guessed. Datasets without such a log (FLEX)
+  support only `align: "start"`.
+- Different conditions are never averaged together; colour/grouping by
+  `fuel`, `o2_pct` or `pressure_kpa` is the frontend's job.
+
+## Source family: ACME Flame Design (PSI-10)
+
+`data_prep/flame_design.py` adds 70 normal-flame tests (`investigation = "ACME Flame Design"`,
+case IDs `FD-<test>`), chosen by rule (up to 5 per fuel and test day, recordings under
+7 MB without corrupted blocks; `python3 -m data_prep.flame_design select`) and stored in
+`data_prep/manifest_projects.json`.
+
+- Same recording format, linking and unit conversions as CFI-G. Two radiometer arrays
+  occur: the standard ACME array (five +60/+30/centre/-30/-60 channels) and, in
+  later runs, the CFI-G array; each dataset lists the channels it really has.
+- `fuel` maps the table's formulas (C2H4, C3H8) to ethylene and propane;
+  `o2_pct` is `XO2 (init)`, `pressure_kpa` the table's mean pressure in atm × 101.325,
+  `z_st` the tabulated mean Zst (null for runs marked `RAMPED`).
+- Inverse flames are not included: their table has no fuel column and a different
+  meaning of the oxygen fraction.
+
+## Source family: Saffire-III (PSI-100)
+
+`data_prep/saffire.py` adds three cases (`investigation = "Saffire-III"`, fuel `SIBAL fabric`)
+to the `saffire-iii` project, from the files listed in `manifest_projects.json`:
+
+- `SAF3-FILE1`, `SAF3-FILE2`: the calibrated 30 Hz workbooks "Sample 1/2 Sensors". The source
+  does not explain the numbering, so the cases are named after the files and described by what
+  their data show: in file 1 the sample thermocouples rise by about 1075 K and the radiometers
+  reach 169 mW/cm²; in file 2 the igniter fires but nothing heats up. Atmosphere filter values
+  are the experiment's own readings before ignition.
+- `SAF3-TELEMETRY`: the 1 Hz downlink as two datasets, `-saffire` (housekeeping) and `-cygnus`
+  (the vehicle's smoke detector, cabin pressure and temperature; rows are multiplexed, so a
+  channel that was not reported on a row is null).
+- Events: `Igniter on` / `Igniter off`, the first and last sample with igniter current above
+  0.3 A (a threshold rule, stated in each event's `source`). This is the project's
+  `ignition_label` for aligned overlays.
+- The page generator `polars_analysis/saffire3.py` remains a separate standalone view.
+
+## Source family: ACME E-FIELD Flames (PSI-22)
+
+`data_prep/efield.py` adds 57 runs (`investigation = "ACME E-FIELD Flames"`, case IDs `EF-<test>`,
+up to 3 per test day with the field on; `python3 -m data_prep.efield select`).
+
+- Fuel and burner per test day come from Table 1 of NASA's "E-FIELD Flames data interpretation
+  document"; fuel concentration and the commanded voltage sweep from each run's
+  `*_VoltageSweep.txt`. `o2_pct` is 21 (the document states the coflow was 21% oxygen in all
+  tests); `pressure_kpa` is the median recorded chamber pressure.
+- The mesh voltage is converted to kV with NASA's empirical equation (V = signal × 2486.18 + 141.97).
+  Polarity is taken from the measured sign, not from the log.
+- Datasets: `-sensors` (125 Hz) and `-field-response`, a derived table binning the ion-current
+  signal by mesh voltage (0.5 kV) over the flame period; its x axis is the field, not time.
+  The overlay endpoint therefore returns an x axis with unit `kV` for `kind: "field-response"`.
+- The test numbering is documented there too: year (2 digits), day of year (3 digits), a letter
+  and a digit; tests that differ only in the last digit are variants or repeats, the letters I, O
+  (and later E) are not used, and the day part is not advanced past midnight.
+
+## Source family: SAME-R (PSI-101)
+
+`data_prep/same.py` adds one case per housekeeping recording of the 2010 flight
+(44 files; `investigation = "SAME-R"`, case IDs `SAMER-gmt<day>_<n>`), each with one
+`-detectors` dataset (about 1 Hz): ISS and shuttle smoke detectors, two ionization
+detectors, P-Trak and DustTrak particle measurements, plume temperature and flow.
+
+- The results workbook lists the materials per GMT day, not per file, so the note lists the
+  materials of that day and does not assign one to a file. Fuel and oxygen are null.
+- `pressure_kpa` is the apparatus's sample-side pressure (not a cabin value).
+- Events `Sample heating on` / `Sample heating off` come from the `HeatingInProgress` flag;
+  that is the project's `ignition_label`, so overlays can be aligned to the start of heating.
+- Research context: `detection`, backed by one quote from `SAME Benefits.pdf`.
+
+## Explorer demo page
+
+`GET /demo` serves one self-contained page (`app/static/demo.html`) that uses only the JSON
+API: project cards, a chart of many runs on one axis (dataset, channel, time zero, colour by
+oxygen / pressure / fuel), run filters, the natural-language box (labelled demo or live) and a
+detail panel with the note, logged events, research context, source and CSV downloads. Click a
+curve to open its run. It loads Plotly from cdnjs, so it needs internet access. It is a demo of the
+API, not the product frontend.
+
+```sh
+python3 -m uvicorn app.main:app      # then open http://localhost:8000/demo
+```

@@ -87,12 +87,17 @@ SCHEMA = {
 
 
 def pdf_pages(path: Path) -> list[str]:
-    """Text of each page, in order (pdftotext separates pages with form feeds)."""
+    """Text of each page, in order (pdftotext separates pages with form feeds, with pypdf fallback)."""
     try:
         output = subprocess.run(["pdftotext", "-layout", str(path), "-"], check=True,
                                 capture_output=True, text=True).stdout
     except FileNotFoundError as error:
-        raise SystemExit("pdftotext (poppler-utils) is required.") from error
+        try:
+            from pypdf import PdfReader
+        except ImportError as imp_err:
+            raise SystemExit("pdftotext (poppler-utils) or pypdf is required.") from (imp_err or error)
+        reader = PdfReader(str(path))
+        return [page.extract_text() or "" for page in reader.pages]
     except subprocess.CalledProcessError as error:
         raise SystemExit(f"Cannot read {path.name}: {error.stderr.strip()}") from error
     pages = output.split("\f")
