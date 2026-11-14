@@ -326,6 +326,14 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
         {"method": EVENT_METHOD, "events": events}, ensure_ascii=False, indent=1), "utf-8")
     (out_dir / "neighbors.json").write_text(json.dumps(
         {"metric": METRIC, "neighbors": nearest_neighbours(catalogue)}, indent=1), "utf-8")
+    registry = json.loads((Path(__file__).parent / "projects.json").read_text("utf-8"))
+    present = set(catalogue["investigation"])
+    shown = [p for p in registry["projects"] if present & set(p["investigations"])]
+    for project in registry["projects"]:
+        if project not in shown:
+            print(f"Project {project['project_id']} has no prepared cases and is not published.")
+    (out_dir / "projects.json").write_text(
+        json.dumps({"projects": shown}, ensure_ascii=False, indent=1), "utf-8")
     context = json.loads((Path(__file__).parent / "research_context.json").read_text("utf-8"))
     for name, item in context["investigations"].items():
         allowed = set(item["tags"]) <= {"prevention", "detection", "suppression", "unknown"}

@@ -434,3 +434,35 @@ does not use `PSI_AI_MODE=demo`.
 This script has not been run against the live API in this repository (no key
 on the build machine); its evidence checks are tested with a stubbed model and
 on real PDF text.
+
+## Projects (missions) and multi-run charts
+
+The start screen is meant to list **projects**, and each project opens views
+that compare many runs. The registry is `data_prep/projects.json`; the
+preparation script publishes only projects that have prepared cases.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/v1/projects` | `ProjectSummary[]`: `project_id`, `title`, `mission`, `summary`, `measures`, `source`, `case_count`, `fuels` |
+| `GET /api/v1/projects/{id}` | the summary plus `filters` (options inside the project) and `views` |
+| `POST /api/v1/projects/{id}/cases/search` | same body and answer as case search, restricted to the project (a filter cannot widen it) |
+| `POST /api/v1/projects/{id}/overlay` | many runs of one channel on one axis |
+
+`views[]` lists the dataset kinds the project has (`sensors`, `droplet`, ...)
+with their `channels` (`key`, `label`, `unit`) and a default selection, so the
+frontend can build its chart pickers without hard-coding anything.
+
+`overlay` request: `{"kind": "sensors", "channel": "PMT1", "filters": {...},
+"align": "start" | "ignition", "max_series": 40, "max_points": 1500}`.
+Response: `channel`, `x` (axis label/unit/align), `matched`, `series[]` (case
+summary fields plus `n_source`, `sampled`, `points: [[x, y|null], ...]`) and a
+`note` stating the sampling method.
+
+- Each curve is a min/max envelope of at most `max_points` samples (peaks and
+  both ends kept); `n_source` is the full count. No smoothing or interpolation.
+- `align: "ignition"` shifts each run so t = 0 is the "Ignition and retraction"
+  entry of its test-point log. Runs without a logged ignition are left out and
+  counted in the note; nothing is guessed. Datasets without such a log (FLEX)
+  support only `align: "start"`.
+- Different conditions are never averaged together; colour/grouping by
+  `fuel`, `o2_pct` or `pressure_kpa` is the frontend's job.
