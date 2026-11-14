@@ -540,3 +540,16 @@ detectors, P-Trak and DustTrak particle measurements, plume temperature and flow
 - Events `Sample heating on` / `Sample heating off` come from the `HeatingInProgress` flag;
   that is the project's `ignition_label`, so overlays can be aligned to the start of heating.
 - Research context: `detection`, backed by one quote from `SAME Benefits.pdf`.
+
+## Explorer demo page
+
+`GET /demo` serves one self-contained page (`app/static/demo.html`) that uses only the JSON
+API: project cards, a chart of many runs on one axis (dataset, channel, time zero, colour by
+oxygen / pressure / fuel), run filters, the natural-language box (labelled demo or live) and a
+detail panel with the note, logged events, research context, source and CSV downloads. Click a
+curve to open its run. It loads Plotly from cdnjs, so it needs internet access. It is a demo of the
+API, not the product frontend.
+
+```sh
+python3 -m uvicorn app.main:app      # then open http://localhost:8000/demo
+```

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.ai.provider import AIUnavailable
 from app.routes.cases import router as cases_router
+from app.routes.demo import router as demo_router
 from app.routes.filters import router as filters_router
 from app.routes.hello import router as hello_router
 from app.routes.projects import router as projects_router
@@ -24,6 +25,7 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 app.include_router(hello_router)
+app.include_router(demo_router)
 app.include_router(cases_router)
 app.include_router(filters_router)
 app.include_router(projects_router)
