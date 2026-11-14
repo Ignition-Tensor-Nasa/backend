@@ -61,6 +61,19 @@
    "investigations": [
     "ACME E-FIELD Flames"
    ]
+  },
+  {
+   "project_id": "same-r",
+   "title": "SAME-R: smoke from spacecraft materials",
+   "order": 6,
+   "mission": "Smoke Aerosol Measurement Experiment (reflight), ISS",
+   "summary": "Samples of spacecraft materials such as Kapton, Teflon, silicone, lampwick and Pyrell are heated until they smoke, and smoke detectors and particle counters record the result in microgravity.",
+   "measures": "ISS and shuttle smoke detectors, ionization detectors, particle counts, plume temperature and flow at about 1 Hz.",
+   "source": "NASA PSI-101",
+   "investigations": [
+    "SAME-R"
+   ],
+   "ignition_label": "Sample heating on"
   }
  ]
 }

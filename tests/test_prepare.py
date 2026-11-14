@@ -144,3 +144,24 @@ def test_efield_sweep_log_window_and_field_response(tmp_path):
     assert response["time_s"].to_list() == [-4.0, -3.0, -2.0, -1.0, 0.0]  # x is the field in kV
     assert response["n"].sum() == 301 - 0  # every sample inside the window
     assert efield.field_response(frame, 0.0, None) is None
+
+
+def test_same_recording_drops_repeated_headers_and_flags_heating(tmp_path):
+    from data_prep import same
+
+    columns = ["Time", "HeatingInProgress", *same.CHANNELS, "SampleSidePressure[AT20](PSIA)"]
+    rows = [",".join(columns)]
+    for t in range(60):
+        values = [str(1000 + t), "1" if 10 <= t <= 19 else "0"] + ["0.5"] * len(same.CHANNELS) + ["14.9"]
+        rows.append(",".join(values))
+        if t == 30:
+            rows.append(",".join(columns))  # a repeated header row inside the file
+    path = tmp_path / "HKPData_gmt1_1.csv"
+    path.write_text("\n".join(rows) + "\n")
+    frame, facts = same.read_recording(path)
+    assert frame.height == 60 and frame["time_s"][0] == 0.0 and frame["time_s"][-1] == 59.0
+    assert facts["heating"] == (10.0, 19.0) and facts["pressure"] == 14.9
+    short = tmp_path / "HKPData_gmt2_1.csv"
+    short.write_text("\n".join(rows[:10]) + "\n")
+    with pytest.raises(Skip):
+        same.read_recording(short)

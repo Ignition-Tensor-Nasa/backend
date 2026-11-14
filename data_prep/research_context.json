@@ -59,6 +59,19 @@
    ],
    "rationale": "The documents shipped with PSI-22 describe the electric-field science and operations; no statement tying the experiment to fire prevention, detection or suppression was reviewed.",
    "evidence": []
+  },
+  "SAME-R": {
+   "tags": [
+    "detection"
+   ],
+   "rationale": "The experiment's stated purpose is measuring smoke from spacecraft materials to improve spacecraft smoke detectors.",
+   "evidence": [
+    {
+     "document": "SAME-R_PSI-101/pdf/SAME Benefits.pdf",
+     "page": 1,
+     "quote": "The limited options available to respond to a spacecraft fire increase the importance of early detection."
+    }
+   ]
   }
  }
 }

@@ -526,3 +526,17 @@ up to 3 per test day with the field on; `python3 -m data_prep.efield select`).
 - The test numbering is documented there too: year (2 digits), day of year (3 digits), a letter
   and a digit; tests that differ only in the last digit are variants or repeats, the letters I, O
   (and later E) are not used, and the day part is not advanced past midnight.
+
+## Source family: SAME-R (PSI-101)
+
+`data_prep/same.py` adds one case per housekeeping recording of the 2010 flight
+(44 files; `investigation = "SAME-R"`, case IDs `SAMER-gmt<day>_<n>`), each with one
+`-detectors` dataset (about 1 Hz): ISS and shuttle smoke detectors, two ionization
+detectors, P-Trak and DustTrak particle measurements, plume temperature and flow.
+
+- The results workbook lists the materials per GMT day, not per file, so the note lists the
+  materials of that day and does not assign one to a file. Fuel and oxygen are null.
+- `pressure_kpa` is the apparatus's sample-side pressure (not a cabin value).
+- Events `Sample heating on` / `Sample heating off` come from the `HeatingInProgress` flag;
+  that is the project's `ignition_label`, so overlays can be aligned to the start of heating.
+- Research context: `detection`, backed by one quote from `SAME Benefits.pdf`.

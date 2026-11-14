@@ -137,5 +137,7 @@
     {"test_id": "18319A1"},
     {"test_id": "18319H1"},
     {"test_id": "18319L1"}
-  ]
+  ],
+  "_comment_same_r": "SAME-R: every HKP recording of the 2010 flight (the adapter reads the whole folder; this flag switches it on).",
+  "same_r": [{"all": true}]
 }

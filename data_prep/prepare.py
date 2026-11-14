@@ -332,6 +332,7 @@ def cfig_cases(data_dir: Path, entries: list[dict]):
 def prepare(data_dir: Path, out_dir: Path) -> None:
     from data_prep.efield import efield_cases
     from data_prep.flame_design import flame_design_cases
+    from data_prep.same import same_cases
     from data_prep.saffire import saffire_cases
     from data_prep.flex import flex_cases  # needs openpyxl; imported late to avoid a cycle
     from data_prep.similarity import METRIC, nearest_neighbours
@@ -347,7 +348,8 @@ def prepare(data_dir: Path, out_dir: Path) -> None:
                           *flex_cases(data_dir, manifest.get("flex_cases", [])),
                           *flame_design_cases(data_dir, more.get("flame_design", [])),
                           *saffire_cases(data_dir, more.get("saffire", [])),
-                          *efield_cases(data_dir, more.get("efield", []))):
+                          *efield_cases(data_dir, more.get("efield", [])),
+                          *same_cases(data_dir, more.get("same_r", []))):
         for meta, frame in exports:
             assert frame.columns == [column["key"] for column in meta["columns"]]
             frame.write_parquet(parquet_dir / meta["file"])
