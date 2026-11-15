@@ -426,10 +426,7 @@ def prepare_saffire(data_dir: Path, out_dir: Path) -> dict | None:
 
     payload = {
         "bespoke_notice": (
-            "Dedykowana analiza SAFFIRE-III (NASA PSI-100): ten 4-sekcyjny układ wykresów "
-            "(czujniki 30 Hz próbek 1 i 2, kolejność dotarcia płomienia TC7–TC12, animowana "
-            "oś nagrzewania oraz 1 Hz telemetria statku Cygnus OA-7 + podsumowanie AI) został "
-            "przygotowany wyłącznie dla tych 2 specjalnych case'ów."
+            "Dedicated 4-section telemetry overview (30 Hz chamber sensors and 1 Hz Cygnus spacecraft downlink) with AI mission analysis."
         ),
         "items": [
             {
@@ -437,9 +434,10 @@ def prepare_saffire(data_dir: Path, out_dir: Path) -> dict | None:
                 "sample_number": 1,
                 "title": "Saffire-III Sample 1 · Large Spacecraft Fire (690 s, 30 Hz + 1 Hz Cygnus)",
                 "subtitle": (
-                    f"Główny pożar w module Cygnus (0.4 × 0.94 m): szczyt {s1_stats['peak_sample_temp_c']:.0f} °C "
-                    f"na TC11 ({s1_stats['peak_after_ignition_s']:.0f} s po zapłonie), radiometr {s1_stats['peak_heat_flux_mw_cm2']:.0f} mW/cm² "
-                    f"oraz odpowiedź detektora dymu FIZ2 po {events['smoke_lag_s']:.0f} s."
+                    f"Primary 0.4 × 0.94 m SIBAL burn aboard Cygnus: {s1_stats['peak_sample_temp_c']:.0f} °C "
+                    f"peak on TC11 ({s1_stats['peak_after_ignition_s']:.0f} s after ignition), "
+                    f"{s1_stats['peak_heat_flux_mw_cm2']:.0f} mW/cm² radiant flux, "
+                    f"and FIZ 2 smoke detector response after {events['smoke_lag_s']:.0f} s."
                 ),
                 "investigation": "Saffire-III (PSI-100)",
                 "capsule": "Cygnus OA-7",
@@ -449,16 +447,16 @@ def prepare_saffire(data_dir: Path, out_dir: Path) -> dict | None:
                 "recording_duration_s": round(float(s1_stats["duration_s"]), 1),
                 "peak_temp_c": round(float(s1_stats["peak_sample_temp_c"]), 1),
                 "peak_heat_flux_mw_cm2": round(float(s1_stats["peak_heat_flux_mw_cm2"]), 1),
-                "highlight_badge": f"BESPOKE · {s1_stats['peak_sample_temp_c']:.0f} °C Peak",
+                "highlight_badge": f"{s1_stats['peak_sample_temp_c']:.0f} °C Peak",
             },
             {
                 "case_id": "SAFFIRE-III-S2",
                 "sample_number": 2,
                 "title": "Saffire-III Sample 2 · Companion 30 Hz Sensor Record & Cygnus Downlink (160 s)",
                 "subtitle": (
-                    f"Drugi zestaw 30 Hz (160 s): impuls zapalnika 60.0–68.0 s, szczyt w smudze "
-                    f"{s2_stats['peak_plume_temp_c']:.1f} °C (TC3), powierzchnia próbki ≤ {s2_stats['peak_sample_temp_c']:.1f} °C "
-                    f"oraz wspólna telemetria 1 Hz statku Cygnus OA-7."
+                    f"Companion 30 Hz sensor record (160 s): 60.0–68.0 s igniter pulse, "
+                    f"{s2_stats['peak_plume_temp_c']:.1f} °C plume peak (TC3), sample surface ≤ {s2_stats['peak_sample_temp_c']:.1f} °C, "
+                    f"and shared 1 Hz Cygnus OA-7 telemetry."
                 ),
                 "investigation": "Saffire-III (PSI-100)",
                 "capsule": "Cygnus OA-7",
@@ -468,7 +466,7 @@ def prepare_saffire(data_dir: Path, out_dir: Path) -> dict | None:
                 "recording_duration_s": round(float(s2_stats["duration_s"]), 1),
                 "peak_temp_c": round(float(s2_stats["peak_sample_temp_c"]), 1),
                 "peak_heat_flux_mw_cm2": round(float(s2_stats["peak_heat_flux_mw_cm2"]), 1),
-                "highlight_badge": "BESPOKE · 160 s Companion",
+                "highlight_badge": "160 s Companion",
             },
         ],
         "samples": {
