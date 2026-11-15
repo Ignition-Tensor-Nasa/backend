@@ -7,3 +7,4 @@ polars_analysis/outputs/
 # Local configuration may contain secrets; commit only the example template.
 .env
 data_prep/vocabulary.proposed.json
+manual_saved_csv/
